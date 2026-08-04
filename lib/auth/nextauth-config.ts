@@ -10,11 +10,11 @@ import type { UserRole, UserStatus } from "@/types/db";
 declare module "next-auth" {
   interface Session {
     user: DefaultSession["user"] & {
-      id: string;
-      role: UserRole;
-      status: UserStatus;
-      retailerId: string | null;
-      agentId: string | null;
+      id?: string;
+      role?: UserRole;
+      status?: UserStatus;
+      retailerId?: string | null;
+      agentId?: string | null;
     };
   }
 
@@ -26,8 +26,11 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
+    id?: string;
     role?: UserRole;
     status?: UserStatus;
+    retailerId?: string | null;
+    agentId?: string | null;
   }
 }
 
@@ -39,7 +42,11 @@ if (!process.env.NEXTAUTH_SECRET) {
 
 export const authOptions: NextAuthOptions = {
   adapter: pgAdapter,
-  session: { strategy: "database" },
+  // NextAuth v4's Credentials provider is only supported with the JWT
+  // session strategy (database sessions throw CALLBACK_CREDENTIALS_JWT_ERROR).
+  // The `sessions` table stays in the schema (harmless; usable if OAuth or a
+  // custom flow is added later), but the MVP relies on signed JWT cookies.
+  session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login" },
   providers: [
@@ -61,8 +68,8 @@ export const authOptions: NextAuthOptions = {
         const valid = await verifyPassword(password, user.password_hash);
         if (!valid) return null;
 
-        // Returned object becomes the `user` argument for the session callback.
-        // The adapter itself handles session row creation; we only return shape.
+        // Returned object becomes the `user` argument for the jwt callback.
+        // We never rely on the adapter to persist anything for Credentials.
         return {
           id: user.id,
           email: user.email,
@@ -74,19 +81,30 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
-      // Database strategy: `user` is the AdapterUser fresh from the DB.
-      // Attach our custom fields so every authenticated route can read them.
-      if (session.user) {
-        session.user.id = user.id;
+    async jwt({ token, user }) {
+      // Only populated on initial sign-in; the DB lookups are done once here
+      // and the result rides in the JWT so `session` needs no DB round-trip.
+      if (user?.id) {
+        token.id = user.id;
+        token.role = user.role;
+        token.status = user.status;
 
         const { rows } = await poolQueryWithScoping(user.id);
         const row = rows[0];
-
-        session.user.role = row?.role satisfies UserRole | undefined;
-        session.user.status = row?.status satisfies UserStatus | undefined;
-        session.user.retailerId = row?.retailer_id ?? null;
-        session.user.agentId = row?.agent_id ?? null;
+        token.retailerId = row?.retailer_id ?? null;
+        token.agentId = row?.agent_id ?? null;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      // JWT strategy: `token` is the decoded session cookie. The session
+      // object mirrors it so every authenticated route can read the fields.
+      if (session.user && token.id) {
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.status = token.status;
+        session.user.retailerId = token.retailerId ?? null;
+        session.user.agentId = token.agentId ?? null;
       }
       return session;
     },

@@ -57,6 +57,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -64,7 +68,27 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+      keyframes: {
+        "magas-aurora": {
+          "0%": { transform: "translate3d(-8%, -6%, 0) scale(1)" },
+          "50%": { transform: "translate3d(6%, 8%, 0) scale(1.15)" },
+          "100%": { transform: "translate3d(-4%, 4%, 0) scale(0.95)" },
+        },
+        "magas-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "magas-fade-up": {
+          from: { opacity: "0", transform: "translateY(16px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        aurora: "magas-aurora 22s ease-in-out infinite alternate",
+        float: "magas-float 7s ease-in-out infinite",
+        "fade-up": "magas-fade-up 0.7s ease-out both",
       },
     },
   },

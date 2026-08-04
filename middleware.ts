@@ -23,10 +23,11 @@ export default withAuth(
           return true;
         }
 
-        // Agent portal + agent API: UNCONDITIONALLY denied. This is a
-        // deliberate MVP boundary per security.md — the schema and stub
-        // routes exist but no agent login flow ships yet.
-        if (path.startsWith("/agent") || path.startsWith("/api/agent")) {
+        // Agent API: UNCONDITIONALLY denied. This is a deliberate MVP
+        // boundary per security.md — no agent login flow ships yet, so no
+        // agent data is ever exposed. The /agent *page* is role-gated below
+        // so an authenticated agent lands on the "coming soon" placeholder.
+        if (path.startsWith("/api/agent")) {
           return false;
         }
 
@@ -35,6 +36,7 @@ export default withAuth(
           "/customer": "customer",
           "/retailer": "retailer",
           "/admin": "admin",
+          "/agent": "agent",
         };
 
         for (const [prefix, allowed] of Object.entries(pageRole)) {

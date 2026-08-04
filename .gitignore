@@ -26,6 +26,9 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# opencode secrets (API keys referenced via {file:...} in opencode.json)
+.opencode/keys/
+
 # typescript
 *.tsbuildinfo
 

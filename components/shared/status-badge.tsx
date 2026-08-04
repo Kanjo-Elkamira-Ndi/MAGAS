@@ -1,10 +1,11 @@
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import type { OrderStatus } from "@/types/db";
 
 // Shared order-status badge per context/ui-context.md. Used by customer,
 // retailer, and admin views so status colors never drift between actors.
 // Color is never the only signal — every status has a text label.
+// Palette comes from the design-system tokens in globals.css and is
+// WCAG AA in both themes (light + dark).
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   placed: "Placed",
@@ -17,20 +18,20 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
-  placed: "bg-slate-500/15 text-slate-700",
-  confirmed: "bg-blue-500/15 text-blue-700",
-  assigned: "bg-blue-500/15 text-blue-700",
-  out_for_delivery: "bg-amber-500/15 text-amber-700",
-  delivered: "bg-green-600/15 text-green-700",
-  cancelled: "bg-slate-400/10 text-slate-500",
-  failed: "bg-red-600/15 text-red-700",
+  placed: "border-transparent bg-muted text-muted-foreground",
+  confirmed: "border-transparent bg-info text-info-foreground",
+  assigned: "border-transparent bg-info text-info-foreground",
+  out_for_delivery: "border-transparent bg-warning text-warning-foreground",
+  delivered: "border-transparent bg-success text-success-foreground",
+  cancelled: "border-transparent bg-secondary text-secondary-foreground",
+  failed: "border-transparent bg-destructive text-destructive-foreground",
 };
 
 export function StatusBadge({ status }: { status: OrderStatus }) {
   return (
     <Badge
       variant="outline"
-      className={cn("border-transparent", STATUS_STYLES[status])}
+      className={STATUS_STYLES[status]}
     >
       {STATUS_LABELS[status]}
     </Badge>

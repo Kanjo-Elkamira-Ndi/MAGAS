@@ -303,3 +303,39 @@ diverges from the plan above. New entries appended at the bottom.)
 - **`DATABASE_URL` in `.env.local` initially used user `postgresql` which
   failed auth** — awaiting a corrected connection string from the user
   before `db:migrate` and the login round-trip verification can run.
+
+- **Database auth (resolved).** The native Debian PostgreSQL 16 cluster on
+  `127.0.0.1:5432` had no `postgresql` role and no usable superuser
+  password. Fixed by running, as the `postgres` OS user:
+  `CREATE ROLE postgresql LOGIN PASSWORD '<pw>'` (password read from the
+  `DATABASE_URL`) and `ALTER DATABASE magas OWNER TO postgresql;` (the
+  `magas` database pre-existed and PG15+ restricts `public`-schema writes to
+  the owner). The `.env.local` URL itself was correct all along; the role
+  just did not exist.
+
+- **Session strategy changed from `database` to `jwt`.** NextAuth v4's
+  Credentials provider throws `CALLBACK_CREDENTIALS_JWT_ERROR`
+  (`UnsupportedStrategyError`) with the database strategy — the two are
+  mutually exclusive in v4. Switched to the canonical JWT strategy; the
+  `sessions` table stays in the schema (dormant, reusable if OAuth/a custom
+  flow is ever added). Side benefit: the middleware's `withAuth` now decodes
+  a real JWT, so `token.role` gates actually work (with database sessions
+  the middleware only ever saw an opaque token and would have denied every
+  protected route). `jwt` callback does the retailers/agents scoping lookup
+  once at sign-in; `session` callback just mirrors the token — no per-request
+  DB hit.
+
+- **Migration + verification all green.** `npm run db:migrate` applied
+  `001_init_schema.sql` (all 12 tables incl. `schema_migrations`, both
+  enums, `orders_customer_idx` + `orders_created_idx` and the rest, 6
+  `updated_at` triggers). Verified by hand: admin seeded via
+  `scripts/seed-admin.ts` (admin@magas.test / Admin-Magas-2026!), dev-server
+  Credentials round-trip returns 302 + `session-token` cookie, `/api/auth/session`
+  reports `role:"admin"`, and middleware 307s `/customer`/`/agent` (wrong /
+  forbidden role) while letting `/admin` through. The plan's "sessions row
+  written" check is obsolete under JWT sessions.
+
+- **`scripts/seed-admin.ts` added** — dev-only idempotent seed (upsert on
+  email) that hashes the password with `lib/auth/password.ts`. Not part of
+  any package script; run manually via
+  `npx tsx --env-file-if-exists=.env.local scripts/seed-admin.ts`.

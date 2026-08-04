@@ -3,70 +3,78 @@
 @tailwind utilities;
 
 /*
- * Placeholder MAGAS palette per context/ui-context.md.
- * The client has not yet supplied final brand assets. Until then:
- *   --primary      blue-600 (#2563EB)  — safe gas/utility placeholder
- *   --success      green-600
- *   --warning      amber-500
- *   --danger       red-600
- * Neutrals use Tailwind's default slate scale.
- * Swap these HSL values for final brand tokens when client signs off.
+ * MAGAS design tokens — generated from the ui-ux-pro-max design system
+ * (design-system/magas/MASTER.md), tuned for WCAG AA in BOTH themes.
+ *
+ * Style: "Modern Dark (Cinema)" — dark is the DEFAULT theme; light is a
+ * toggle. Premium dark + gold accent. Inter for headings + body.
+ *
+ * NOTE: Brand colors are placeholder until the client signs off final
+ * assets (context/ui-context.md). Every surface color lives here as a
+ * CSS variable, so swapping brand tokens later is a one-file change.
+ *
+ * Light theme lives in `:root`, dark in `.dark` (class-based, set by
+ * components/theme-provider.tsx before first paint to avoid FOUC).
  */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 60 9.1% 97.8%; /* stone-50   #FAFAF9 */
+    --foreground: 24 9.8% 4.1%; /* stone-950  #0C0A09 */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 24 9.8% 4.1%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 72.2% 50.6%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142.1 76.2% 36.3%;
+    --popover-foreground: 24 9.8% 4.1%;
+    --primary: 32 95% 37%; /* amber-700   #B45309 (gold CTA) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 24 6% 90%; /* stone-200   #E7E5E4 */
+    --secondary-foreground: 24 10% 10%; /* stone-900  #1C1917 */
+    --muted: 60 9% 96%; /* stone-100   #F5F5F4 */
+    --muted-foreground: 24 5% 32%; /* stone-600  #57534E */
+    --accent: 24 6% 90%; /* stone-200 */
+    --accent-foreground: 24 10% 10%; /* stone-900 */
+    --destructive: 0 72% 51%; /* red-600    #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 29%; /* green-700  #15803D */
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    --warning: 32 95% 44%; /* amber-600  #D97706 */
+    --warning-foreground: 24 10% 10%; /* dark text on amber */
+    --info: 200 98% 33%; /* sky-700    #0369A1 */
+    --info-foreground: 0 0% 100%;
+    --border: 24 6% 90%; /* stone-200 */
+    --input: 24 6% 83%; /* stone-300  #D6D3D1 */
+    --ring: 32 95% 37%; /* gold focus ring */
+    --radius: 0.625rem;
+    --font-inter: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
       Roboto, "Helvetica Neue", Arial, sans-serif;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142.1 70.6% 45.3%;
-    --success-foreground: 0 0% 100%;
-    --warning: 43 96% 56%;
-    --warning-foreground: 0 0% 100%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: 24 10% 4%; /* stone-950  #0C0A09 (no pure black) */
+    --foreground: 60 9.1% 97.8%; /* stone-50  #FAFAF9 */
+    --card: 24 8% 8%; /* lifted panel  #161412 */
+    --card-foreground: 60 9.1% 97.8%;
+    --popover: 24 8% 8%;
+    --popover-foreground: 60 9.1% 97.8%;
+    --primary: 38 92% 50%; /* amber-500  #F59E0B (gold CTA) */
+    --primary-foreground: 24 10% 10%; /* dark text on gold */
+    --secondary: 24 10% 10%; /* stone-900  #1C1917 */
+    --secondary-foreground: 60 9.1% 97.8%;
+    --muted: 24 7% 12%; /* #221F1B */
+    --muted-foreground: 24 6% 64%; /* stone-400  #A8A29E */
+    --accent: 24 7% 12%;
+    --accent-foreground: 60 9.1% 97.8%;
+    --destructive: 0 84% 60%; /* red-500    #EF4444 */
+    --destructive-foreground: 24 10% 10%;
+    --success: 160 84% 52%; /* emerald-400 #34D399 */
+    --success-foreground: 161 94% 9%; /* dark on emerald */
+    --warning: 48 96% 53%; /* amber-400  #FBBF24 */
+    --warning-foreground: 24 10% 10%;
+    --info: 199 89% 60%; /* sky-400    #38BDF8 */
+    --info-foreground: 205 92% 16%; /* dark on sky */
+    --border: 24 5% 15%; /* stone-800  #292524 */
+    --input: 24 5% 15%;
+    --ring: 38 92% 50%; /* gold focus ring */
   }
 }
 
@@ -74,7 +82,70 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+  }
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  /* Subtle theme-aware scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+/* Ambient gradient blobs for the landing hero (CSS-only, GPU-friendly) */
+@keyframes magas-aurora {
+  0% {
+    transform: translate3d(-8%, -6%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, 8%, 0) scale(1.15);
+  }
+  100% {
+    transform: translate3d(-4%, 4%, 0) scale(0.95);
+  }
+}
+
+@keyframes magas-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Respect reduced motion: kill scroll + decorative animation */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
