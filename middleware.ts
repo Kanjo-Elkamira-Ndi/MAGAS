@@ -1,0 +1,69 @@
+import { withAuth } from "next-auth/middleware";
+
+export default withAuth(
+  function middleware() {
+    // withAuth's `authorized` callback below does the actual decision.
+    // This function only exists to satisfy the type signature.
+  },
+  {
+    pages: { signIn: "/login" },
+    callbacks: {
+      authorized({ token, req }) {
+        const path = req.nextUrl.pathname;
+
+        // Public + auth route groups: always accessible.
+        if (
+          path.startsWith("/login") ||
+          path.startsWith("/register") ||
+          path.startsWith("/forgot-password") ||
+          path.startsWith("/reset-password") ||
+          path.startsWith("/api/auth") ||
+          path.startsWith("/api/public")
+        ) {
+          return true;
+        }
+
+        // Agent portal + agent API: UNCONDITIONALLY denied. This is a
+        // deliberate MVP boundary per security.md — the schema and stub
+        // routes exist but no agent login flow ships yet.
+        if (path.startsWith("/agent") || path.startsWith("/api/agent")) {
+          return false;
+        }
+
+        // Role-gated page routes (parenthesized route groups flatten in URLs).
+        const pageRole: Record<string, string> = {
+          "/customer": "customer",
+          "/retailer": "retailer",
+          "/admin": "admin",
+        };
+
+        for (const [prefix, allowed] of Object.entries(pageRole)) {
+          if (path.startsWith(prefix)) {
+            return token?.role === allowed;
+          }
+        }
+
+        // Role-gated API routes (defense-in-depth; route handlers re-check).
+        const apiRole: Record<string, string> = {
+          "/api/customer": "customer",
+          "/api/retailer": "retailer",
+          "/api/admin": "admin",
+        };
+
+        for (const [prefix, allowed] of Object.entries(apiRole)) {
+          if (path.startsWith(prefix)) {
+            return token?.role === allowed;
+          }
+        }
+
+        // Everything else (e.g. public marketing routes) is allowed.
+        return true;
+      },
+    },
+  },
+);
+
+export const config = {
+  // Run middleware on every routed path except Next internals & static files.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
