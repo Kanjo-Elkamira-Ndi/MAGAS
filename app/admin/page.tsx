@@ -1,184 +1,139 @@
-import { Package, Store, Users } from "lucide-react";
-import { DashboardShell } from "@/components/shared/dashboard-shell";
-import { EmptyState, StatCard } from "@/components/shared/empty-state";
-import { StatusBadge } from "@/components/shared/status-badge";
+import Link from "next/link";
+import { ArrowRight, Check, Store, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { BarChart } from "@/components/dashboard/trend-chart";
+import { OrdersDataTable } from "@/components/dashboard/orders-table";
 import { requireRole } from "@/lib/auth/session";
 import {
   formatFcfa,
   getLatestOrders,
   getPlatformStats,
 } from "@/lib/db/queries/orders";
-import { getApprovedRetailers } from "@/lib/db/queries/retailers";
+import { getRevenueByDay } from "@/lib/db/queries/payments";
+import { getAllRetailers } from "@/lib/db/queries/retailers";
+import { setRetailerStatusAction } from "@/lib/actions/dashboard";
 
-const NAV = [{ href: "/admin", label: "Overview" }];
+export default async function AdminHomePage() {
+  await requireRole("admin");
 
-export default async function AdminDashboardPage() {
-  const session = await requireRole("admin");
-  const email = session.user.email ?? "there";
-
-  const [stats, orders, retailers] = await Promise.all([
+  const [stats, orders, retailers, trend] = await Promise.all([
     getPlatformStats(),
-    getLatestOrders(5),
-    getApprovedRetailers(),
+    getLatestOrders(10),
+    getAllRetailers(),
+    getRevenueByDay(14),
   ]);
 
+  const pending = retailers.filter((r) => r.status === "pending");
+
   return (
-    <DashboardShell
-      user={{
-        name: session.user.name ?? null,
-        email: session.user.email ?? null,
-        role: session.user.role ?? "admin",
-      }}
-      nav={NAV}
-    >
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Platform overview</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Signed in as {email}. Live platform metrics across every retailer.
-          </p>
-        </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Platform overview"
+        description="Live metrics across every retailer, order and payment on MAGAS."
+      >
+        <Button asChild variant="outline">
+          <Link href="/admin/retailers">
+            <Store aria-hidden="true" className="size-4" />
+            Manage retailers
+          </Link>
+        </Button>
+      </PageHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Customers" value={String(stats.customers)} />
-          <StatCard label="Retailers" value={String(stats.retailers)} />
-          <StatCard label="Orders" value={String(stats.orders)} />
-          <StatCard
-            label="Revenue"
-            value={formatFcfa(stats.revenue)}
-            tone="primary"
-          />
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Latest orders</h2>
-              {orders.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {orders.length} most recent
-                </span>
-              )}
-            </div>
-
-            {orders.length === 0 ? (
-              <div className="overflow-hidden rounded-xl border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/40 text-left text-xs tracking-wide text-muted-foreground uppercase">
-                      <th className="px-4 py-3 font-medium">Order</th>
-                      <th className="px-4 py-3 font-medium">Customer</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      <th className="px-4 py-3 text-right font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td colSpan={4} className="px-4 py-12">
-                        <EmptyState
-                          className="border-0"
-                          icon={<Package aria-hidden="true" className="size-5" />}
-                          title="No orders in the system yet"
-                          description="Every order across all retailers streams here for platform-level monitoring."
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-xl border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/40 text-left text-xs tracking-wide text-muted-foreground uppercase">
-                      <th className="px-4 py-3 font-medium">Order</th>
-                      <th className="px-4 py-3 font-medium">Customer</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      <th className="px-4 py-3 text-right font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {orders.map((order) => (
-                      <tr key={order.id}>
-                        <td className="px-4 py-3.5 font-medium">
-                          #{order.id.slice(0, 8)}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <p className="text-sm">{order.customer_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {order.business_name} ·{" "}
-                            {new Date(order.created_at).toLocaleString(
-                              "en-GB",
-                              {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <StatusBadge status={order.status} />
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-semibold">
-                          {formatFcfa(order.total_amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3">
-              <span className="text-xs text-muted-foreground">
-                Full lifecycle:
-              </span>
-              <StatusBadge status="placed" />
-              <StatusBadge status="confirmed" />
-              <StatusBadge status="assigned" />
-              <StatusBadge status="out_for_delivery" />
-              <StatusBadge status="delivered" />
-              <StatusBadge status="failed" />
-              <StatusBadge status="cancelled" />
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-4">
-            <h2 className="text-sm font-semibold">Approved retailers</h2>
-            {retailers.length === 0 ? (
-              <EmptyState
-                icon={<Store aria-hidden="true" className="size-5" />}
-                title="No retailers yet"
-                description="Retailer sign-ups and onboarding approvals will appear here."
-              />
-            ) : (
-              <div className="overflow-hidden rounded-xl border">
-                <ul className="divide-y">
-                  {retailers.map((retailer) => (
-                    <li key={retailer.id} className="px-4 py-3.5">
-                      <p className="text-sm font-medium">
-                        {retailer.business_name}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {retailer.location} · {retailer.orders} orders
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <EmptyState
-              className="border-muted"
-              icon={<Users aria-hidden="true" className="size-5" />}
-              title="System status"
-              description="Payment stubs (MoMo / Orange) and order state machine are wired — full flows land in Phase 1."
-            />
-          </section>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Customers" value={String(stats.customers)} hint="Active accounts" />
+        <StatCard
+          label="Retailers"
+          value={String(stats.retailers)}
+          hint={`${pending.length} awaiting approval`}
+          tone={pending.length > 0 ? "warning" : "default"}
+        />
+        <StatCard label="Orders" value={String(stats.orders)} hint="All time" />
+        <StatCard
+          label="Revenue"
+          value={formatFcfa(stats.revenue)}
+          hint="Excl. cancelled"
+          tone="primary"
+        />
       </div>
-    </DashboardShell>
+
+      <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Platform revenue — last 14 days</h2>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/payments">
+                Payments <ArrowRight aria-hidden="true" className="size-3.5" />
+              </Link>
+            </Button>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <BarChart
+              data={trend.map((t) => ({
+                label: new Date(t.day + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+                value: t.revenue,
+              }))}
+              formatValue={(v) => formatFcfa(v)}
+              height={180}
+            />
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Retailer approvals</h2>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/retailers">
+                View all <ArrowRight aria-hidden="true" className="size-3.5" />
+              </Link>
+            </Button>
+          </div>
+          {pending.length === 0 ? (
+            <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+              <Check aria-hidden="true" className="mb-2 size-4 text-success" />
+              No retailers waiting — approval queue is clear.
+            </div>
+          ) : (
+            <ul className="overflow-hidden rounded-xl border bg-card">
+              {pending.slice(0, 5).map((r) => (
+                <li key={r.id} className="flex items-center gap-3 border-b px-4 py-3 last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{r.business_name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {r.location} · {r.owner_email}
+                    </p>
+                  </div>
+                  <form action={setRetailerStatusAction.bind(null, r.id, "approved")}>
+                    <Button size="sm" variant="outline" className="gap-1">
+                      <Check aria-hidden="true" className="size-3.5" />
+                      Approve
+                    </Button>
+                  </form>
+                  <form action={setRetailerStatusAction.bind(null, r.id, "suspended")}>
+                    <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground">
+                      <X aria-hidden="true" className="size-3.5" />
+                      Reject
+                    </Button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Latest orders</h2>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/orders">
+              All orders <ArrowRight aria-hidden="true" className="size-3.5" />
+            </Link>
+          </Button>
+        </div>
+        <OrdersDataTable role="admin" data={orders} />
+      </section>
+    </div>
   );
 }

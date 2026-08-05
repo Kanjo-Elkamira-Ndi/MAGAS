@@ -15,6 +15,9 @@ next-env.d.ts
 .DS_Store
 *.pem
 
+# local design exploration (not part of the repo)
+/design-system
+
 # debug
 npm-debug.log*
 yarn-debug.log*

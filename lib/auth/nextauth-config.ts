@@ -93,6 +93,7 @@ export const authOptions: NextAuthOptions = {
 
         const { rows } = await poolQueryWithScoping(user.id);
         const row = rows[0];
+        token.name = row?.display_name ?? null;
         token.retailerId = row?.retailer_id ?? null;
         token.agentId = row?.agent_id ?? null;
         token.customerId = row?.customer_id ?? null;
@@ -104,6 +105,7 @@ export const authOptions: NextAuthOptions = {
       // object mirrors it so every authenticated route can read the fields.
       if (session.user && token.id) {
         session.user.id = token.id;
+        session.user.name = token.name ?? null;
         session.user.role = token.role;
         session.user.status = token.status;
         session.user.retailerId = token.retailerId ?? null;
@@ -124,11 +126,13 @@ async function poolQueryWithScoping(userId: string) {
   return pool.query<{
     role: UserRole;
     status: UserStatus;
+    display_name: string | null;
     retailer_id: string | null;
     agent_id: string | null;
     customer_id: string | null;
   }>(
     `SELECT u.role, u.status,
+            COALESCE(c.full_name, r.business_name, da.name) AS display_name,
             r.id AS retailer_id,
             da.id AS agent_id,
             c.user_id AS customer_id
