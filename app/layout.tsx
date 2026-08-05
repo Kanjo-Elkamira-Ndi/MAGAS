@@ -34,7 +34,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+      <body
+        suppressHydrationWarning
+        className="min-h-screen bg-background font-sans text-foreground antialiased"
+      >
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

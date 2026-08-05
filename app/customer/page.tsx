@@ -5,12 +5,23 @@ import { DashboardShell } from "@/components/shared/dashboard-shell";
 import { EmptyState, StatCard } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { requireRole } from "@/lib/auth/session";
+import {
+  formatFcfa,
+  getCustomerStats,
+  getOrdersByCustomer,
+} from "@/lib/db/queries/orders";
 
 const NAV = [{ href: "/customer", label: "Overview" }];
 
 export default async function CustomerDashboardPage() {
   const session = await requireRole("customer");
   const email = session.user.email ?? "there";
+  const customerId = session.user.customerId;
+
+  const [stats, orders] = await Promise.all([
+    getCustomerStats(customerId ?? ""),
+    getOrdersByCustomer(customerId ?? "", 4),
+  ]);
 
   return (
     <DashboardShell
@@ -40,26 +51,77 @@ export default async function CustomerDashboardPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <StatCard label="Active orders" value="0" hint="Nothing in transit" />
-          <StatCard label="Delivered" value="0" hint="Lifetime orders" />
-          <StatCard label="Saved addresses" value="0" hint="Add one when you order" />
+          <StatCard
+            label="Active orders"
+            value={String(stats.active)}
+            hint={stats.active > 0 ? "In transit" : "Nothing in transit"}
+          />
+          <StatCard
+            label="Delivered"
+            value={String(stats.delivered)}
+            hint="Lifetime orders"
+          />
+          <StatCard
+            label="Saved addresses"
+            value={String(stats.addresses)}
+            hint="Add one when you order"
+          />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">Recent orders</h2>
+              {orders.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {orders.length} most recent
+                </span>
+              )}
             </div>
-            <EmptyState
-              icon={<Package aria-hidden="true" className="size-5" />}
-              title="No orders yet"
-              description="When you place your first order, it will show up here with live status tracking."
-              action={
-                <Button asChild variant="outline">
-                  <Link href="/register">Order your first cylinder</Link>
-                </Button>
-              }
-            />
+
+            {orders.length === 0 ? (
+              <EmptyState
+                icon={<Package aria-hidden="true" className="size-5" />}
+                title="No orders yet"
+                description="When you place your first order, it will show up here with live status tracking."
+                action={
+                  <Button asChild variant="outline">
+                    <Link href="/register">Order your first cylinder</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="overflow-hidden rounded-xl border">
+                <ul className="divide-y">
+                  {orders.map((order) => (
+                    <li
+                      key={order.id}
+                      className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {order.business_name} ·{" "}
+                          {order.items} item{order.items === 1 ? "" : "s"}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {new Date(order.created_at).toLocaleDateString(
+                            "en-GB",
+                            { day: "numeric", month: "short" },
+                          )}{" "}
+                          · {order.payment_method.toUpperCase()} ·{" "}
+                          {order.delivery_address}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold">
+                        {formatFcfa(order.total_amount)}
+                      </span>
+                      <StatusBadge status={order.status} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3">
               <span className="text-xs text-muted-foreground">
                 Order statuses you&apos;ll see:

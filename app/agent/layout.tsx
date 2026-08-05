@@ -1,11 +1,13 @@
-import { redirect } from "next/navigation";
+import { requireRole } from "@/lib/auth/session";
 
-// The delivery agent portal is intentionally dormant per context/security.md.
-// No user with role 'agent' can be created yet, and even if one existed this
-// guard denies unconditionally — the layout never renders real agent UI.
-export default function AgentLayout({
+// Agent portal page — role-gated like the other dashboards. Only users
+// with role 'agent' reach the placeholder below; agent *API* routes stay
+// unconditionally denied in middleware.ts (no agent data is exposed in the
+// MVP). The original Phase 0 layout denied everyone; that changed when the
+// agent "coming soon" placeholder page was added.
+export default async function AgentLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  void children;
-  redirect("/login?error=agent-not-available");
+  await requireRole("agent");
+  return <>{children}</>;
 }

@@ -15,6 +15,7 @@ declare module "next-auth" {
       status?: UserStatus;
       retailerId?: string | null;
       agentId?: string | null;
+      customerId?: string | null;
     };
   }
 
@@ -31,6 +32,7 @@ declare module "next-auth/jwt" {
     status?: UserStatus;
     retailerId?: string | null;
     agentId?: string | null;
+    customerId?: string | null;
   }
 }
 
@@ -93,6 +95,7 @@ export const authOptions: NextAuthOptions = {
         const row = rows[0];
         token.retailerId = row?.retailer_id ?? null;
         token.agentId = row?.agent_id ?? null;
+        token.customerId = row?.customer_id ?? null;
       }
       return token;
     },
@@ -105,6 +108,7 @@ export const authOptions: NextAuthOptions = {
         session.user.status = token.status;
         session.user.retailerId = token.retailerId ?? null;
         session.user.agentId = token.agentId ?? null;
+        session.user.customerId = token.customerId ?? null;
       }
       return session;
     },
@@ -122,13 +126,16 @@ async function poolQueryWithScoping(userId: string) {
     status: UserStatus;
     retailer_id: string | null;
     agent_id: string | null;
+    customer_id: string | null;
   }>(
     `SELECT u.role, u.status,
             r.id AS retailer_id,
-            da.id AS agent_id
+            da.id AS agent_id,
+            c.user_id AS customer_id
      FROM users u
      LEFT JOIN retailers r ON r.user_id = u.id
      LEFT JOIN delivery_agents da ON da.user_id = u.id
+     LEFT JOIN customers c ON c.user_id = u.id
      WHERE u.id = $1`,
     [userId],
   );

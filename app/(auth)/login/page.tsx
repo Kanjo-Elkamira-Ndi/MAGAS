@@ -2,13 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/shared/auth-shell";
 import { SocialButtons } from "@/components/shared/social-buttons";
+
+// Where each role lands after sign-in (when no callbackUrl is given).
+const ROLE_HOME: Record<string, string> = {
+  admin: "/admin",
+  retailer: "/retailer",
+  agent: "/agent",
+  customer: "/customer",
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,7 +42,18 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    // Role-aware landing. Honours a valid ?callbackUrl= (e.g. a protected
+    // page the middleware bounced the user off of), otherwise sends each
+    // role to its own dashboard.
+    const params = new URLSearchParams(window.location.search);
+    const callbackUrl = params.get("callbackUrl");
+    if (callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
+      router.push(callbackUrl);
+    } else {
+      const session = await getSession();
+      const role = session?.user?.role;
+      router.push(ROLE_HOME[role ?? "customer"] ?? "/customer");
+    }
     router.refresh();
   }
 

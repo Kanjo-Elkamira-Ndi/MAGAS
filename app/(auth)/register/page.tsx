@@ -49,7 +49,15 @@ export default function RegisterPage() {
       setLoading(false);
       return;
     }
-    router.push("/");
+
+    // New accounts are customers. Honour a valid ?callbackUrl= if present.
+    const params = new URLSearchParams(window.location.search);
+    const callbackUrl = params.get("callbackUrl");
+    if (callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
+      router.push(callbackUrl);
+    } else {
+      router.push("/customer");
+    }
     router.refresh();
   }
 
