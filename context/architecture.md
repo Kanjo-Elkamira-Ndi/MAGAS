@@ -50,9 +50,10 @@ magas/
 - **Mutations** (place order, update profile, accept/reject order): Server
   Actions or `app/api/**/route.ts` handlers, not client-side fetch-and-mutate
   unless a form needs progressive client interactivity
-- **Live/real-time surfaces** (active order tracking): a small client
-  component using TanStack Query (polling) or SSE — kept as the *exception*,
-  not the default pattern
+- **Live/real-time surfaces** (active order tracking, delivery position):
+  a small client component doing plain `setInterval` + Server Action
+  polling — no data-fetching library — kept as the *exception*, not the
+  default pattern (see `components/dashboard/delivery-map.tsx`)
 
 ## Auth architecture (NextAuth)
 
@@ -131,7 +132,6 @@ should not require touching the order state machine.
 
 - Do not implement real MoMo/Orange Money SDK calls or webhooks
 - Do not implement multi-retailer carts
-- Do not implement live map tracking
 
 If a task seems to require any of the above, stop and flag it rather than
 improvising a workaround.

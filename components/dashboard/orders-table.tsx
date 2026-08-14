@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/dashboard/data-table";
 import { OrderDialog } from "@/components/dashboard/order-dialog";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { startNavProgress } from "@/components/shared/nav-progress";
 import { formatFcfa } from "@/lib/format";
 import type { OrderListItem } from "@/lib/db/queries/orders";
 import { cn } from "@/lib/utils";
@@ -129,8 +130,10 @@ export function OrdersDataTable({
 
   function handleRowClick(o: OrderListItem) {
     if (role === "customer") {
+      startNavProgress();
       router.push(`/customer/order/${o.id}`);
     } else if (role === "agent") {
+      startNavProgress();
       router.push(`/agent/order/${o.id}`);
     } else {
       setSelected(o);
@@ -241,7 +244,10 @@ export function RecentOrdersTable({ data }: { data: OrderListItem[] }) {
         title: "No orders yet",
         description: "When you place your first order it will show up here with live tracking.",
       }}
-      rowClick={(o) => router.push(`/customer/order/${o.id}`)}
+      rowClick={(o) => {
+        startNavProgress();
+        router.push(`/customer/order/${o.id}`);
+      }}
     />
   );
 }

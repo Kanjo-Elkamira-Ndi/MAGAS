@@ -79,6 +79,8 @@ export type RetailerProfile = {
   id: string;
   business_name: string;
   location: string;
+  latitude: number | null;
+  longitude: number | null;
   status: string;
   owner_email: string | null;
   owner_phone: string | null;
@@ -90,7 +92,7 @@ export async function getRetailerProfile(
   retailerId: string,
 ): Promise<RetailerProfile | null> {
   const { rows } = await pool.query<RetailerProfile>(
-    `SELECT rt.id, rt.business_name, rt.location, rt.status,
+    `SELECT rt.id, rt.business_name, rt.location, rt.latitude, rt.longitude, rt.status,
             u.email AS owner_email, u.phone AS owner_phone,
             rt.created_at,
             (SELECT COUNT(*) FROM products p WHERE p.retailer_id = rt.id)::int AS products
@@ -100,4 +102,16 @@ export async function getRetailerProfile(
     [retailerId],
   );
   return rows[0] ?? null;
+}
+
+export async function updateRetailerLocation(
+  retailerId: string,
+  input: { location: string; latitude: number; longitude: number },
+): Promise<void> {
+  await pool.query(
+    `UPDATE retailers
+     SET location = $1, latitude = $2, longitude = $3, updated_at = now()
+     WHERE id = $4`,
+    [input.location, input.latitude, input.longitude, retailerId],
+  );
 }

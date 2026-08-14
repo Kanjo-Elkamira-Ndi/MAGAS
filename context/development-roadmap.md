@@ -58,6 +58,20 @@ to a later phase's work while an earlier phase's foundation is incomplete.
   (`assigned → out_for_delivery → delivered`, or `→ failed`), through the
   shared `lib/orders/status.ts` state machine
 
+## Phase 4c — Live delivery tracking (Google Maps)
+- Coordinates: `latitude`/`longitude` on `delivery_agents` (current
+  position, no history), `addresses` and `retailers` (captured via Google
+  Places Autocomplete at entry time), `delivery_latitude`/`delivery_longitude`
+  on `orders`
+- Agent-side: explicit opt-in "Share my location" toggle on the order-detail
+  page, `navigator.geolocation.watchPosition` → `updateAgentLocationAction`
+- Customer-side: `DeliveryMap` on the order-detail page while
+  `out_for_delivery`, polling `getAgentLocationAction` every ~15s — no
+  route line or ETA (no Directions API) in this pass
+- Requires a Google Cloud project with billing enabled and Maps
+  JavaScript API + Places API turned on — see `.env.example` for the two
+  API keys needed
+
 ## Phase 5 — Hardening & MVP launch readiness
 - Full RBAC review across all routes (not just pages) per `security.md`
 - Error handling audit — consistent response shape, no leaked internals
@@ -75,7 +89,6 @@ to a later phase's work while an earlier phase's foundation is incomplete.
   which the client should start in parallel since approval can take days.
   Code-side, only `lib/payments/momo.ts` / `orange.ts` need building against
   the existing `PaymentResult` contract
-- **Live map-based delivery tracking**
 - **Multi-retailer carts**
 - **Native mobile app** (web is responsive-first for MVP)
 

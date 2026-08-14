@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { MapPin, Phone, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { RetailerLocationForm } from "@/components/dashboard/retailer-location-form";
 import { requireRole } from "@/lib/auth/session";
 import { getRetailerProfile } from "@/lib/db/queries/retailers";
 
@@ -83,6 +84,13 @@ export default async function RetailerSettingsPage() {
           </div>
         </dl>
       </div>
+
+      {profile && (
+        <RetailerLocationForm
+          location={profile.location}
+          hasCoordinates={profile.latitude !== null && profile.longitude !== null}
+        />
+      )}
     </div>
   );
 }

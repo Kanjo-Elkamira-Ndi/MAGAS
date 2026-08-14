@@ -35,6 +35,9 @@ already use daily (Cash on Delivery, MTN Mobile Money, Orange Money).
   delivery agent record management and login invites, payment reconciliation
 - Delivery agent dashboard: login (via admin invite), assigned-order list,
   self-service delivery status updates
+- Live delivery tracking via Google Maps: agent's current position and the
+  delivery destination pin, shown on the customer's order page while an
+  order is `out_for_delivery`, updated by client-side polling
 - Simulated payments (COD is real/manual; MoMo and Orange Money are simulated,
   not integrated with live provider APIs)
 - Order status tracking through a shared state machine
@@ -42,7 +45,6 @@ already use daily (Cash on Delivery, MTN Mobile Money, Orange Money).
 **Explicitly out of scope for MVP:**
 - Real MTN Mobile Money / Orange Money API integration (simulated only —
   see `workflows.md` for the swap-in contract)
-- Live map-based delivery tracking
 - Multi-retailer carts (one retailer per order)
 - Native mobile apps (web only, responsive)
 
@@ -54,8 +56,11 @@ already use daily (Cash on Delivery, MTN Mobile Money, Orange Money).
 - **Database:** PostgreSQL, raw `pg` driver — **no ORM** (no Prisma, no Drizzle)
 - **Styling/UI:** Tailwind CSS + shadcn/ui
 - **Validation:** Zod
-- **Data fetching (client-side):** TanStack Query, used sparingly (e.g. live
-  order tracking); most reads are Server Components
+- **Data fetching (client-side):** plain `setInterval` + Server Action polling
+  for the one live surface (delivery tracking) — no data-fetching library;
+  most reads are Server Components
+- **Maps:** Google Maps JavaScript API + Places API via `@react-google-maps/api`,
+  for live delivery tracking
 - **Payments:** Simulated in MVP; real MoMo/Orange Money deferred post-MVP
 
 ## Key stakeholders

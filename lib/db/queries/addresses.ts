@@ -16,13 +16,28 @@ export async function getAddressesByCustomer(
 
 export async function addAddress(
   customerId: string,
-  input: { label?: string; line1: string; city: string; notes?: string },
+  input: {
+    label?: string;
+    line1: string;
+    city: string;
+    notes?: string;
+    latitude?: number;
+    longitude?: number;
+  },
 ): Promise<AddressRow> {
   const { rows } = await pool.query<AddressRow>(
-    `INSERT INTO addresses (customer_id, label, line1, city, notes)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO addresses (customer_id, label, line1, city, notes, latitude, longitude)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [customerId, input.label ?? null, input.line1, input.city, input.notes ?? null],
+    [
+      customerId,
+      input.label ?? null,
+      input.line1,
+      input.city,
+      input.notes ?? null,
+      input.latitude ?? null,
+      input.longitude ?? null,
+    ],
   );
   return rows[0];
 }

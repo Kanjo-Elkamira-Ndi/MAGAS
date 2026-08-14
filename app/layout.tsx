@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { NavProgress } from "@/components/shared/nav-progress";
 import "./globals.css";
 
 const inter = Inter({
@@ -38,6 +39,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-screen bg-background font-sans text-foreground antialiased"
       >
+        <NavProgress />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

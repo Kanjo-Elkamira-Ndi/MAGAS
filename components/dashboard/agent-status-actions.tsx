@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Truck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { AgentLocationSharing } from "@/components/dashboard/agent-location-sharing";
 import {
   agentMarkDeliveredAction,
   agentMarkFailedAction,
@@ -48,7 +49,8 @@ export function AgentStatusActions({
   if (!canSend && !canDeliver && !canFail) return null;
 
   return (
-    <div className="flex flex-col gap-2 border-t pt-4">
+    <div className="flex flex-col gap-4 border-t pt-4">
+      <AgentLocationSharing status={status} />
       <div className="flex flex-wrap items-center gap-2">
         {canSend && (
           <Button

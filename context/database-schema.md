@@ -25,7 +25,8 @@ role           user_role not null   -- enum: 'customer' | 'retailer' | 'agent' |
 email          text unique
 phone          text unique
 password_hash  text not null
-status         text not null default 'active'  -- 'active' | 'suspended' | 'banned'
+status         text not null default 'active'  -- 'active' | 'suspended' | 'banned' | 'pending'
+  -- 'pending' = an agent invited to log in who hasn't set a password yet
 created_at     timestamptz default now()
 updated_at     timestamptz default now()
 ```
@@ -47,6 +48,8 @@ label       text          -- 'Home', 'Office', etc.
 line1       text not null
 city        text not null
 notes       text
+latitude    double precision  -- captured via Google Places Autocomplete, nullable
+longitude   double precision
 created_at  timestamptz default now()
 ```
 
@@ -56,6 +59,8 @@ id            uuid primary key default gen_random_uuid()
 user_id       uuid unique references users(id) on delete cascade
 business_name text not null
 location      text not null
+latitude      double precision  -- captured via Google Places Autocomplete, nullable
+longitude     double precision
 status        text not null default 'pending'  -- 'pending' | 'approved' | 'suspended'
 approved_by   uuid references users(id)
 created_at    timestamptz default now()
@@ -83,6 +88,8 @@ status           order_status not null default 'placed'
   --       | 'delivered' | 'cancelled' | 'failed'
 payment_method   text not null   -- 'cod' | 'momo' | 'orange'
 delivery_address text not null  -- denormalized snapshot at order time
+delivery_latitude  double precision  -- destination pin for live tracking, nullable
+delivery_longitude double precision
 total_amount     integer not null
 created_at       timestamptz default now()
 updated_at       timestamptz default now()
@@ -109,22 +116,25 @@ created_at   timestamptz default now()
 updated_at   timestamptz default now()
 ```
 
-## Scaffolded, dormant tables (Agent portal — not yet implemented)
+## Delivery agent tables
 
 ### `delivery_agents`
 ```sql
-id         uuid primary key default gen_random_uuid()
-user_id    uuid unique references users(id)  -- NULLABLE on purpose
-name       text not null
-phone      text not null
-status     text not null default 'active'
-created_at timestamptz default now()
+id                  uuid primary key default gen_random_uuid()
+user_id             uuid unique references users(id)  -- NULLABLE on purpose
+name                text not null
+phone               text not null
+status              text not null default 'active'
+latitude            double precision  -- current live position, nullable
+longitude           double precision
+location_updated_at timestamptz       -- last time the agent reported a position
+created_at          timestamptz default now()
 ```
 > `user_id` is nullable deliberately: admin can create an agent as a plain
-> contact record today (matching the original requirement "register delivery
-> agent records") without that agent having login access. When the agent
-> portal ships, existing records get a `user_id` attached — **no migration
-> required to "turn on" the feature.**
+> contact record without that agent having login access, then invite them
+> to a real login later (`inviteAgentAction` in `lib/actions/dashboard.ts`)
+> without a migration. `latitude`/`longitude` hold only the agent's current
+> position (overwritten on each report), not a location history.
 
 ### `order_assignments`
 ```sql
@@ -134,9 +144,9 @@ agent_id    uuid references delivery_agents(id)
 assigned_at timestamptz default now()
 status      text not null default 'assigned'  -- 'assigned' | 'delivered' | 'failed'
 ```
-> Populated today by admin manually assigning an order to an agent record
-> (dropdown of plain contacts). The agent themselves cannot see or act on
-> this yet.
+> Populated by admin assigning an order to an agent record. The assigned
+> agent then sees and acts on the order themselves via the agent portal
+> (`app/agent/*`, `lib/actions/agent.ts`).
 
 ## Auth-support tables
 
@@ -153,7 +163,7 @@ expires       timestamptz not null
 id         uuid primary key default gen_random_uuid()
 user_id    uuid references users(id) on delete cascade
 token      text unique not null
-purpose    text not null   -- 'email_verify' | 'phone_verify' | 'password_reset'
+purpose    text not null   -- 'email_verify' | 'phone_verify' | 'password_reset' | 'agent_invite'
 expires_at timestamptz not null
 used_at    timestamptz
 created_at timestamptz default now()
@@ -169,8 +179,8 @@ customers 1---N orders
 retailers 1---N orders
 orders 1---N order_items
 orders 1---N payments
-orders 1---0/1 order_assignments (dormant until agent portal ships)
-delivery_agents 1---N order_assignments (dormant)
+orders 1---0/1 order_assignments
+delivery_agents 1---N order_assignments
 ```
 
 ## Migration rules for opencode

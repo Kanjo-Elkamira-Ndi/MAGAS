@@ -56,6 +56,8 @@ export interface AddressRow {
   line1: string;
   city: string;
   notes: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: Date;
 }
 
@@ -64,6 +66,8 @@ export interface RetailerRow {
   user_id: string;
   business_name: string;
   location: string;
+  latitude: number | null;
+  longitude: number | null;
   status: RetailerStatus;
   approved_by: string | null;
   created_at: Date;
@@ -88,6 +92,8 @@ export interface OrderRow {
   status: OrderStatus;
   payment_method: PaymentMethod;
   delivery_address: string;
+  delivery_latitude: number | null;
+  delivery_longitude: number | null;
   total_amount: number;
   created_at: Date;
   updated_at: Date;
@@ -118,6 +124,9 @@ export interface DeliveryAgentRow {
   name: string;
   phone: string;
   status: AgentStatus;
+  latitude: number | null;
+  longitude: number | null;
+  location_updated_at: Date | null;
   created_at: Date;
 }
 

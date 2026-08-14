@@ -31,7 +31,10 @@ import {
 } from "@/lib/db/queries/agents";
 import { createAgentInvite } from "@/lib/db/queries/delivery-agents";
 import { updateUserStatus } from "@/lib/db/queries/users";
-import { updateRetailerStatus } from "@/lib/db/queries/retailers";
+import {
+  updateRetailerLocation,
+  updateRetailerStatus,
+} from "@/lib/db/queries/retailers";
 import { pool } from "@/lib/db/pool";
 import type { UserStatus } from "@/types/db";
 
@@ -206,6 +209,29 @@ export async function deleteProductAction(productId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Retailer profile (retailer-scoped)
+// ---------------------------------------------------------------------------
+
+const retailerLocationSchema = z.object({
+  location: z.string().trim().min(1, "Location is required").max(200),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+export async function updateRetailerLocationAction(
+  input: z.infer<typeof retailerLocationSchema>,
+) {
+  const session = await getSession();
+  const retailerId = session?.user?.retailerId;
+  if (!retailerId) roleError();
+  const data = retailerLocationSchema.parse(input);
+
+  await updateRetailerLocation(retailerId, data);
+  revalidatePath("/retailer/settings");
+  revalidatePath("/customer/retailers");
+}
+
+// ---------------------------------------------------------------------------
 // Addresses (customer-scoped)
 // ---------------------------------------------------------------------------
 
@@ -214,6 +240,11 @@ const addressSchema = z.object({
   line1: z.string().trim().min(3, "Address line is required").max(200),
   city: z.string().trim().min(1, "City is required").max(100),
   notes: z.string().trim().max(300).optional().or(z.literal("")),
+  // Set when the address came from Google Places Autocomplete. Optional —
+  // a customer who types a manual address without picking a suggestion
+  // still gets to submit; the address just won't have a map pin.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
 });
 
 export async function addAddressAction(input: z.infer<typeof addressSchema>) {
@@ -227,6 +258,8 @@ export async function addAddressAction(input: z.infer<typeof addressSchema>) {
     line1: data.line1,
     city: data.city,
     notes: data.notes || undefined,
+    latitude: data.latitude,
+    longitude: data.longitude,
   });
   const count = (await pool.query(
     "SELECT COUNT(*)::int AS n FROM addresses WHERE customer_id = $1",

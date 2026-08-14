@@ -15,7 +15,10 @@ import {
   findValidVerificationToken,
   markTokenUsed,
 } from "@/lib/db/queries/verification-tokens";
-import { activateAgentAccount } from "@/lib/db/queries/delivery-agents";
+import {
+  activateAgentAccount,
+  updateAgentLocation,
+} from "@/lib/db/queries/delivery-agents";
 import {
   markDelivered,
   markFailed,
@@ -23,6 +26,10 @@ import {
 } from "@/lib/orders/order-actions";
 
 const orderIdSchema = z.string().uuid();
+const coordsSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
 
 function roleError(): never {
   throw new Error("You are not allowed to perform this action.");
@@ -104,4 +111,25 @@ export async function agentMarkFailedAction(orderId: string) {
   await requireOwnAssignment(id);
   await markFailed(id);
   revalidateAgentOrderPaths(id);
+}
+
+// ---------------------------------------------------------------------------
+// Live position (delivery tracking, agent self-service)
+// ---------------------------------------------------------------------------
+
+// This is a property of the agent, not of a specific order — no
+// requireOwnAssignment(orderId) here, since a watchPosition callback has no
+// order context handy, and no revalidatePath, since it fires every ~15s
+// from the browser and isn't rendered server-side (the customer's map polls
+// a separate read action instead).
+export async function updateAgentLocationAction(input: {
+  latitude: number;
+  longitude: number;
+}) {
+  const session = await getSession();
+  const agentId = session?.user?.role === "agent" ? session.user.agentId : null;
+  if (!agentId) roleError();
+
+  const { latitude, longitude } = coordsSchema.parse(input);
+  await updateAgentLocation(agentId, latitude, longitude);
 }

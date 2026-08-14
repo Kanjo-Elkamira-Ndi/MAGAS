@@ -4,10 +4,12 @@ import { hashPassword } from "@/lib/auth/password";
 import { createVerificationToken } from "@/lib/db/queries/verification-tokens";
 import type { DeliveryAgentRow } from "@/types/db";
 
-// Delivery-agent login lifecycle: inviting an existing delivery_agents
+// Delivery-agent login lifecycle (inviting an existing delivery_agents
 // contact record to a real account, and activating that account once the
-// agent sets their own password. Contact-record CRUD (name/phone/status)
-// lives in lib/db/queries/agents.ts — this file owns the user_id link.
+// agent sets their own password) plus the agent's live position for
+// delivery tracking. Contact-record CRUD (name/phone/status) lives in
+// lib/db/queries/agents.ts — this file owns the user_id link and anything
+// tied to the agent as an identity rather than as a list row.
 
 export async function getDeliveryAgentById(
   id: string,
@@ -70,4 +72,42 @@ export async function activateAgentAccount(
     "UPDATE users SET password_hash = $1, status = 'active' WHERE id = $2",
     [passwordHash, userId],
   );
+}
+
+// --- Live position (delivery tracking) --------------------------------
+// Current position only, overwritten on each report — no location history.
+
+export async function updateAgentLocation(
+  agentId: string,
+  latitude: number,
+  longitude: number,
+): Promise<void> {
+  await pool.query(
+    `UPDATE delivery_agents
+     SET latitude = $1, longitude = $2, location_updated_at = now()
+     WHERE id = $3`,
+    [latitude, longitude, agentId],
+  );
+}
+
+export type AgentLocation = {
+  latitude: number;
+  longitude: number;
+  location_updated_at: Date;
+};
+
+export async function getAgentLocationForOrder(
+  orderId: string,
+): Promise<AgentLocation | null> {
+  const { rows } = await pool.query<AgentLocation>(
+    `SELECT da.latitude, da.longitude, da.location_updated_at
+     FROM order_assignments oa
+     JOIN delivery_agents da ON da.id = oa.agent_id
+     WHERE oa.order_id = $1
+       AND oa.status = 'assigned'
+       AND da.latitude IS NOT NULL
+       AND da.longitude IS NOT NULL`,
+    [orderId],
+  );
+  return rows[0] ?? null;
 }

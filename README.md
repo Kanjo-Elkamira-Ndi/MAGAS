@@ -25,7 +25,9 @@ status themselves. A super admin oversees the whole marketplace.
 - PostgreSQL via raw `pg` (no Prisma/Drizzle)
 - Tailwind CSS + shadcn/ui
 - Zod for validation
-- TanStack Query (used selectively, e.g. live order tracking)
+- Google Maps JavaScript API + Places API (`@react-google-maps/api`) for
+  live delivery tracking; no data-fetching library — the one live/polling
+  surface is a plain `setInterval` + Server Action
 
 ## MVP notes
 
@@ -37,6 +39,11 @@ status themselves. A super admin oversees the whole marketplace.
   self-registration for the `agent` role. Admin invites an existing
   `delivery_agents` contact from `/admin/agents`; the agent sets their own
   password via a one-time link. See `context/security.md`.
+- Live delivery tracking requires a Google Cloud project with billing
+  enabled and the Maps JavaScript API + Places API turned on — see
+  `.env.example` for the two API keys it needs. Without a key configured,
+  the map card degrades to an "unavailable" notice rather than breaking
+  the page.
 
 ## Getting started
 

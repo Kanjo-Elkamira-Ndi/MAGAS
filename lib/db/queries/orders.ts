@@ -228,6 +228,8 @@ export type OrderDetail = {
   status: OrderStatus;
   payment_method: string;
   delivery_address: string;
+  delivery_latitude: number | null;
+  delivery_longitude: number | null;
   total_amount: number;
   cancelled_reason: string | null;
   created_at: Date;
@@ -248,7 +250,8 @@ export type OrderDetail = {
 
 export async function getOrderById(orderId: string): Promise<OrderDetail | null> {
   const { rows } = await pool.query<Omit<OrderDetail, "items" | "payment" | "assignment">>(
-    `SELECT o.id, o.status, o.payment_method, o.delivery_address, o.total_amount,
+    `SELECT o.id, o.status, o.payment_method, o.delivery_address,
+            o.delivery_latitude, o.delivery_longitude, o.total_amount,
             o.cancelled_reason, o.created_at, o.updated_at,
             c.full_name AS customer_name,
             rt.business_name, rt.location AS retailer_location

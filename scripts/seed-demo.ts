@@ -16,6 +16,16 @@ import type { UserRole } from "@/types/db";
 
 const PASSWORD_SUFFIX = "-Magas-2026!";
 
+// Illustrative Douala-area points so live delivery tracking has something
+// real to render without waiting on a live checkout flow (which doesn't
+// exist yet — orders are only ever created here). Agent starts partway
+// between the retailer and the customer, as if already en route.
+const DEMO_COORDS = {
+  retailer: { lat: 4.0483, lng: 9.7043 },
+  customer: { lat: 4.0511, lng: 9.699 },
+  agent: { lat: 4.0498, lng: 9.702 },
+};
+
 const DEMO = {
   admin: { email: "admin@magas.test", password: `Admin${PASSWORD_SUFFIX}` },
   customer: {
@@ -71,10 +81,18 @@ async function ensureCustomer(userId: string, fullName: string, phone: string) {
   );
   if (!rows[0]) {
     const address = await pool.query<{ id: string }>(
-      `INSERT INTO addresses (customer_id, label, line1, city, notes)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO addresses (customer_id, label, line1, city, notes, latitude, longitude)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [userId, "Home", "Rue Berthe, près de la pharmacie", "Douala", "3rd floor"],
+      [
+        userId,
+        "Home",
+        "Rue Berthe, près de la pharmacie",
+        "Douala",
+        "3rd floor",
+        DEMO_COORDS.customer.lat,
+        DEMO_COORDS.customer.lng,
+      ],
     );
     await pool.query(
       `UPDATE customers SET default_address_id = $1 WHERE user_id = $2`,
@@ -91,15 +109,24 @@ async function ensureRetailer(
   approvedById: string,
 ) {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO retailers (user_id, business_name, location, status, approved_by)
-     VALUES ($1, $2, $3, 'approved', $4)
+    `INSERT INTO retailers (user_id, business_name, location, latitude, longitude, status, approved_by)
+     VALUES ($1, $2, $3, $4, $5, 'approved', $6)
      ON CONFLICT (user_id) DO UPDATE SET
        business_name = EXCLUDED.business_name,
        location = EXCLUDED.location,
+       latitude = EXCLUDED.latitude,
+       longitude = EXCLUDED.longitude,
        status = 'approved',
        approved_by = EXCLUDED.approved_by
      RETURNING id`,
-    [userId, businessName, location, approvedById],
+    [
+      userId,
+      businessName,
+      location,
+      DEMO_COORDS.retailer.lat,
+      DEMO_COORDS.retailer.lng,
+      approvedById,
+    ],
   );
   return rows[0].id;
 }
@@ -126,15 +153,21 @@ async function ensureProducts(retailerId: string) {
 }
 
 async function ensureAgent(userId: string, name: string, phone: string) {
+  // Seeded with a position already reported (as if en route) so the live
+  // tracking map has something to show without waiting on the agent to
+  // grant browser geolocation permission first.
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO delivery_agents (user_id, name, phone)
-     VALUES ($1, $2, $3)
+    `INSERT INTO delivery_agents (user_id, name, phone, latitude, longitude, location_updated_at)
+     VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT (user_id) DO UPDATE SET
        name = EXCLUDED.name,
        phone = EXCLUDED.phone,
-       status = 'active'
+       status = 'active',
+       latitude = EXCLUDED.latitude,
+       longitude = EXCLUDED.longitude,
+       location_updated_at = now()
      RETURNING id`,
-    [userId, name, phone],
+    [userId, name, phone, DEMO_COORDS.agent.lat, DEMO_COORDS.agent.lng],
   );
   return rows[0].id;
 }
@@ -242,6 +275,8 @@ async function seedOrders(
         status: o.status,
         paymentMethod: o.paymentMethod,
         deliveryAddress: "Rue Berthe, Akwa, Douala",
+        deliveryLatitude: DEMO_COORDS.customer.lat,
+        deliveryLongitude: DEMO_COORDS.customer.lng,
         total: o.total,
         at: o.at,
       },
@@ -277,14 +312,16 @@ async function insertOrder(
     status: "placed" | "confirmed" | "assigned" | "out_for_delivery" | "delivered" | "cancelled";
     paymentMethod: string;
     deliveryAddress: string;
+    deliveryLatitude: number;
+    deliveryLongitude: number;
     total: number;
     at: Date;
   },
   items: Array<{ productId: string; quantity: number; price: number }>,
 ): Promise<string> {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO orders (customer_id, retailer_id, status, payment_method, delivery_address, total_amount, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+    `INSERT INTO orders (customer_id, retailer_id, status, payment_method, delivery_address, delivery_latitude, delivery_longitude, total_amount, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
      RETURNING id`,
     [
       o.customerId,
@@ -292,6 +329,8 @@ async function insertOrder(
       o.status,
       o.paymentMethod,
       o.deliveryAddress,
+      o.deliveryLatitude,
+      o.deliveryLongitude,
       o.total,
       o.at,
     ],

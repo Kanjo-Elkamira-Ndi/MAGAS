@@ -8,12 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
+import { PlaceAutocompleteInput } from "@/components/shared/place-autocomplete-input";
 import {
   addAddressAction,
   deleteAddressAction,
   setDefaultAddressAction,
 } from "@/lib/actions/dashboard";
 import type { AddressRow } from "@/types/db";
+
+const EMPTY_FORM = {
+  label: "",
+  line1: "",
+  city: "",
+  notes: "",
+  latitude: undefined as number | undefined,
+  longitude: undefined as number | undefined,
+};
 
 export function AddressManager({
   addresses,
@@ -26,7 +36,7 @@ export function AddressManager({
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<AddressRow | null>(null);
-  const [form, setForm] = useState({ label: "", line1: "", city: "", notes: "" });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
 
   function submit(e: React.FormEvent) {
@@ -35,7 +45,7 @@ export function AddressManager({
     startTransition(async () => {
       try {
         await addAddressAction(form);
-        setForm({ label: "", line1: "", city: "", notes: "" });
+        setForm(EMPTY_FORM);
         setShowForm(false);
         router.refresh();
       } catch (err) {
@@ -129,13 +139,19 @@ export function AddressManager({
             </div>
             <div className="sm:col-span-2">
               <Label htmlFor="addr-line1">Address line</Label>
-              <Input
+              <PlaceAutocompleteInput
                 id="addr-line1"
                 required
                 placeholder="12 Rue de la Paix"
                 value={form.line1}
-                onChange={(e) => setForm({ ...form, line1: e.target.value })}
+                onChange={(line1) => setForm({ ...form, line1 })}
+                onPlaceSelect={({ address, lat, lng }) =>
+                  setForm({ ...form, line1: address, latitude: lat, longitude: lng })
+                }
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Pick a suggestion to enable live map tracking for orders to this address.
+              </p>
             </div>
             <div>
               <Label htmlFor="addr-city">City</Label>
