@@ -382,8 +382,14 @@ export async function setRetailerStatusAction(
 export async function reconcilePaymentAction(paymentId: string) {
   const session = await getSession();
   if (session?.user?.role !== "admin") roleError();
+  // COD-only, and only from pending — the UI already only renders this
+  // button for that case, but with real NotchPay/Fapshi money now
+  // flowing through this table, the server must enforce it too: without
+  // this guard, a crafted/replayed request against a real momo/orange
+  // payment id could fabricate a "success" on money that never arrived.
   await pool.query(
-    "UPDATE payments SET status = 'success', updated_at = now() WHERE id = $1",
+    `UPDATE payments SET status = 'success', updated_at = now()
+     WHERE id = $1 AND method = 'cod' AND status = 'pending'`,
     [orderIdSchema.parse(paymentId)],
   );
   revalidatePath("/admin/payments");

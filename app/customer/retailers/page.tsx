@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { MapPin, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { requireRole } from "@/lib/auth/session";
 import { getApprovedRetailers } from "@/lib/db/queries/retailers";
@@ -40,7 +42,7 @@ export default async function CustomerRetailersPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Browse retailers"
-        description={needle ? `Results for “${q}”` : "Approved retailers near you with live prices. Ordering will go live in Phase 1."}
+        description={needle ? `Results for “${q}”` : "Approved retailers near you with live prices — order and pay by cash, MoMo, or Orange Money."}
       />
 
       {filteredProducts.length === 0 ? (
@@ -92,6 +94,11 @@ export default async function CustomerRetailersPage({
                       </li>
                     ))}
                   </ul>
+                  <div className="border-t p-3">
+                    <Button asChild size="sm" className="w-full">
+                      <Link href={`/customer/checkout/${retailer.id}`}>Order from here</Link>
+                    </Button>
+                  </div>
                 </li>
               );
             })}

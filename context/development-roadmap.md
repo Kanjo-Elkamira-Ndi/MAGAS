@@ -24,11 +24,15 @@ to a later phase's work while an earlier phase's foundation is incomplete.
 - Retailer/product browse (authenticated) reusing public data layer
 - Schema: `customers`, `addresses`, `retailers`, `products`
 
-## Phase 2 — Ordering + simulated payments
-- Order placement flow (`orders`, `order_items`)
+## Phase 2 — Ordering + payments
+- Order placement flow (`orders`, `order_items`, `lib/actions/checkout.ts`)
 - Order status state machine (`lib/orders/status.ts`)
-- Simulated payment flow (`/api/payments/simulate`, `payments` table)
-- Customer order history + tracking view (polling or SSE)
+- Real payments via NotchPay (primary) + Fapshi (fallback) —
+  `lib/payments/{notchpay,fapshi,charge}.ts`, webhook receivers
+  (`app/api/payments/{notchpay,fapshi}/route.ts`), poll fallback
+  (`pollPaymentStatusAction`), `PAYMENTS_MODE=simulate` for dev without
+  sandbox credentials
+- Customer order history + tracking view (polling)
 - Order cancellation (customer, while `placed`/`confirmed`)
 
 ## Phase 3 — Retailer dashboard
@@ -84,11 +88,6 @@ to a later phase's work while an earlier phase's foundation is incomplete.
 
 ## Explicitly deferred (post-MVP — do not start early)
 
-- **Real payment integration**: MTN MoMo Open API, Orange Money Web Payment
-  API — requires merchant/collection account setup with the providers,
-  which the client should start in parallel since approval can take days.
-  Code-side, only `lib/payments/momo.ts` / `orange.ts` need building against
-  the existing `PaymentResult` contract
 - **Multi-retailer carts**
 - **Native mobile app** (web is responsive-first for MVP)
 

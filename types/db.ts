@@ -18,6 +18,10 @@ export type PaymentMethod = "cod" | "momo" | "orange";
 
 export type PaymentStatus = "pending" | "success" | "failed";
 
+// Which aggregator actually processed a momo/orange attempt — null for
+// cod (no aggregator involved) or a not-yet-attempted online payment.
+export type PaymentProvider = "notchpay" | "fapshi";
+
 export type RetailerStatus = "pending" | "approved" | "suspended";
 
 export type AgentStatus = "active" | "inactive";
@@ -112,7 +116,9 @@ export interface PaymentRow {
   order_id: string;
   method: PaymentMethod;
   status: PaymentStatus;
+  provider: PaymentProvider | null;
   provider_ref: string | null;
+  provider_transaction_id: string | null;
   amount: number;
   created_at: Date;
   updated_at: Date;

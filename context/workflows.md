@@ -69,28 +69,41 @@ cancelled   failed
   reject illegal transitions (e.g. `delivered → confirmed`) at the function
   level, not just in the UI
 
-## 5. Simulated payment flow (MVP)
+## 5. Payment flow (NotchPay primary, Fapshi fallback)
 
-1. Order placed with `payment_method: 'momo'` or `'orange'`
-2. Client (or server, depending on final UX decision) calls
-   `POST /api/payments/simulate` with `{ orderId, method, amount }`
-3. Handler introduces an artificial delay (to mimic a real provider round
-   trip), then:
-   - Writes/updates a `payments` row with a fake `provider_ref` and
-     `status: 'success'` (or `'failed'`, useful for testing failure-state UI)
-   - On success, does **not** by itself change `orders.status` — payment
-     status and order status are separate concerns; a retailer still must
-     confirm the order per workflow 4
-4. **Post-MVP swap-in:** when real MoMo/Orange Money integration is built,
-   only `lib/payments/momo.ts` / `orange.ts` need real provider SDK calls
-   implementing the same `PaymentResult` contract
-   (`{ status, providerRef }`) — no changes needed to order flow, UI, or
-   admin reconciliation views. `/api/payments/momo` and
-   `/api/payments/orange` are reserved paths for this later phase.
-5. Cash on Delivery is not "simulated" — it's genuinely manual: `payments`
-   row starts `pending`, and admin marks it reconciled
-   (`POST /api/admin/payments/:id/reconcile`) once delivery is confirmed and
-   cash is physically collected.
+1. Customer checks out (`lib/actions/checkout.ts`, `placeOrderAction`) with
+   `payment_method: 'momo'` or `'orange'` — the `orders`, `order_items`, and
+   a `payments` row (`status: 'pending'`) are written in one transaction,
+   with a reference (`provider_ref`) generated *before* any provider is
+   contacted, so a fast webhook can never race ahead of the row existing.
+2. After the transaction commits, `lib/payments/charge.ts`'s `chargeOrder()`
+   tries **NotchPay** first; only if NotchPay is unavailable (network/
+   timeout/5xx/auth failure — never a clean decline) does it fall through
+   to **Fapshi**. Whichever provider is used gets recorded on the payment
+   row (`payments.provider`).
+3. Resolution arrives one of two ways: a webhook
+   (`app/api/payments/notchpay/route.ts` or `.../fapshi/route.ts`,
+   signature-verified, deliberately unauthenticated per `middleware.ts`'s
+   comment there), or a client-side poll fallback
+   (`pollPaymentStatusAction`, `components/dashboard/payment-status-poller.tsx`)
+   in case a webhook is delayed or missed. Either path calls
+   `updatePaymentStatus()`, which is idempotent (`WHERE status = 'pending'`)
+   so a repeat webhook is a safe no-op.
+   - On success, this does **not** by itself change `orders.status` —
+     payment status and order status stay separate concerns; a retailer
+     still must confirm the order per workflow 4.
+   - On failure (both providers), the order stays `placed` and the
+     customer gets a **"Retry payment"** affordance
+     (`retryPaymentAction`) that inserts a *new* `payments` row rather
+     than mutating the failed one, preserving full attempt history.
+4. Dev-only fake processor: set `PAYMENTS_MODE=simulate` to route through
+   `lib/payments/simulate.ts` instead of real provider calls (artificial
+   delay, 95% success rate) — useful before sandbox credentials are
+   provisioned. Never set in production.
+5. Cash on Delivery is not simulated or provider-routed — it's genuinely
+   manual: `payments` row starts `pending`, and admin marks it reconciled
+   (`reconcilePaymentAction`, COD-and-pending enforced server-side) once
+   delivery is confirmed and cash is physically collected.
 
 ## 6. Retailer order handling
 

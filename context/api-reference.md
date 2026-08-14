@@ -3,7 +3,10 @@
 All routes are Next.js **Route Handlers** (`app/api/**/route.ts`) unless a
 Server Action is explicitly noted. Base path: `/api`. All authenticated
 routes read the session via NextAuth's `auth()` helper — no route trusts a
-client-supplied role or ID.
+client-supplied role or ID. **One deliberate exception**: the payment
+provider webhooks below have no session at all (an external service is
+calling in) and instead trust a verified request signature — see
+`security.md`.
 
 Response shape (all routes):
 ```json
@@ -89,11 +92,18 @@ All queries scoped to `session.retailer_id` server-side — never trust an
 
 ## Payments — `/api/payments/*`
 
+Real `route.ts` files (unlike most of this document, which mostly describes
+mutations that actually ship as Server Actions) — these have to be, since
+an external payment provider needs a real URL to POST a webhook to.
+
 | Route | Method | Notes |
 |---|---|---|
-| `/api/payments/simulate` | POST | MVP-only simulated processor — see `workflows.md` |
-| `/api/payments/momo` | — | **Not implemented** — reserved path for post-MVP real integration |
-| `/api/payments/orange` | — | **Not implemented** — reserved path for post-MVP real integration |
+| `/api/payments/notchpay` | POST | NotchPay webhook receiver — signature-verified, unauthenticated by design |
+| `/api/payments/fapshi` | POST | Fapshi webhook receiver — signature-verified, unauthenticated by design |
+
+Charge initiation itself is a Server Action (`placeOrderAction` at
+checkout, `retryPaymentAction` on the order page), not a route — see
+`workflows.md` §5.
 
 ## Conventions for opencode when adding a route
 

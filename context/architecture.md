@@ -31,7 +31,8 @@ magas/
 │       ├── retailer/
 │       ├── agent/                # unused on purpose — portal ships as Server Actions
 │       ├── admin/
-│       └── payments/simulate/    # simulated payment processor endpoint
+│       └── payments/             # notchpay/ and fapshi/ webhook receivers —
+│                                  # unauthenticated by design, signature-verified
 ├── lib/
 │   ├── db/                       # pg pool, query helpers, migrations
 │   ├── auth/                     # NextAuth config, callbacks, adapter glue
@@ -113,24 +114,38 @@ Placed → Confirmed (by retailer) → Assigned (to agent, admin-only)
 
 Payment status (`pending | success | failed`) is a **separate concern** from
 order status — see `database-schema.md` and `workflows.md`. This decoupling
-is deliberate: swapping simulated payments for real MoMo/Orange Money later
-should not require touching the order state machine.
+is deliberate: a payment resolving (via webhook or poll) never itself
+advances `orders.status`; a retailer still confirms every order regardless
+of how it was paid.
 
-## Payments architecture (simulated for MVP)
+## Payments architecture (NotchPay + Fapshi)
 
-- `/api/payments/simulate` mimics a provider callback: accepts
-  `{ orderId, method, amount }`, introduces an artificial delay, writes a
-  `payments` row, and updates `orders.status`
+- `lib/payments/charge.ts`'s `chargeOrder()` orchestrates a primary
+  (NotchPay) + fallback (Fapshi) charge: falls through to Fapshi only on
+  `ProviderUnavailableError` (network/timeout/5xx/auth), never on a clean
+  decline. `lib/payments/notchpay.ts` / `fapshi.ts` each implement
+  `initiateCharge` / `verifyWebhookSignature` / `getChargeStatus`.
+- Resolution is asynchronous: `app/api/payments/notchpay/route.ts` and
+  `.../fapshi/route.ts` are real webhook receivers (the one exception to
+  this app's Server-Actions-only convention — an external service needs a
+  real URL to POST to), signature-verified, deliberately left
+  unauthenticated by `middleware.ts` since there's no session on an
+  external POST. `components/dashboard/payment-status-poller.tsx` polls a
+  fallback Server Action in case a webhook is delayed or missed.
 - Cash on Delivery is unaffected — a `payments` row is created at order
-  placement with `status: 'pending'`, reconciled manually by admin on delivery
+  placement with `status: 'pending'`, reconciled manually by admin
+  (`reconcilePaymentAction`, server-enforced to COD-and-pending only).
 - `lib/payments/` exposes a stable `PaymentResult` contract
-  (`{ status, providerRef }`) shared by `simulate.ts` and the not-yet-built
-  `momo.ts` / `orange.ts`, so post-MVP integration only requires implementing
-  those two files — no changes to order flow, UI, or admin reconciliation
+  (`{ status, providerRef }`) for resolved state, plus a
+  `ChargeInitiationResult` discriminated union (`redirect` /
+  `push_sent` / `failed`) for the inherently asynchronous initiation step
+  — checkout (`lib/actions/checkout.ts`) creates the order+payment in one
+  transaction, then calls the charge orchestrator strictly after commit.
+- `PAYMENTS_MODE=simulate` routes through `lib/payments/simulate.ts` (dev
+  only, never in production) instead of real provider calls.
 
 ## What NOT to build yet
 
-- Do not implement real MoMo/Orange Money SDK calls or webhooks
 - Do not implement multi-retailer carts
 
 If a task seems to require any of the above, stop and flag it rather than

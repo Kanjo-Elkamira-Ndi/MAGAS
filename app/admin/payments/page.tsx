@@ -34,6 +34,7 @@ export default async function AdminPaymentsPage() {
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Retailer</th>
                 <th className="px-4 py-3 font-medium">Method</th>
+                <th className="px-4 py-3 font-medium">Provider</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">When</th>
@@ -43,7 +44,7 @@ export default async function AdminPaymentsPage() {
             <tbody className="divide-y">
               {payments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                     No payments recorded yet.
                   </td>
                 </tr>
@@ -56,6 +57,9 @@ export default async function AdminPaymentsPage() {
                     <td className="px-4 py-3">{p.customer_name ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{p.retailer_name ?? "—"}</td>
                     <td className="px-4 py-3 capitalize">{p.method}</td>
+                    <td className="px-4 py-3 text-muted-foreground capitalize">
+                      {p.provider ?? "—"}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant="outline" className={STATUS_STYLE[p.status] ?? ""}>
                         {p.status}

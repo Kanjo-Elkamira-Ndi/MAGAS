@@ -244,7 +244,14 @@ export type OrderDetail = {
     quantity: number;
     price_at_order: number;
   }>;
-  payment: { method: string; status: string; provider_ref: string | null; amount: number } | null;
+  payment: {
+    id: string;
+    method: string;
+    status: string;
+    provider: string | null;
+    provider_ref: string | null;
+    amount: number;
+  } | null;
   assignment: { agent_name: string; status: string } | null;
 };
 
@@ -274,8 +281,13 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
       [orderId],
     ),
     pool.query<NonNullable<OrderDetail["payment"]>>(
-      `SELECT method, status, provider_ref, amount
-       FROM payments WHERE order_id = $1 LIMIT 1`,
+      // Retries insert a new row rather than mutating a failed one
+      // (lib/actions/payments.ts), so this must take the latest attempt,
+      // not an arbitrary one — a bare LIMIT 1 with no ORDER BY was only
+      // safe while every order had at most one payment row.
+      `SELECT id, method, status, provider, provider_ref, amount
+       FROM payments WHERE order_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
       [orderId],
     ),
     pool.query<NonNullable<OrderDetail["assignment"]>>(

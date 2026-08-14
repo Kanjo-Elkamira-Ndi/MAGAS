@@ -1,11 +1,13 @@
+import type { PoolClient } from "pg";
 import { pool } from "@/lib/db/pool";
-import type { PaymentStatus, PaymentMethod } from "@/types/db";
+import type { PaymentStatus, PaymentMethod, PaymentProvider } from "@/types/db";
 
 export type PaymentListItem = {
   id: string;
   order_id: string;
   method: PaymentMethod;
   status: PaymentStatus;
+  provider: PaymentProvider | null;
   provider_ref: string | null;
   amount: number;
   created_at: Date;
@@ -17,7 +19,7 @@ export async function getPaymentsByRetailer(
   retailerId: string,
 ): Promise<PaymentListItem[]> {
   const { rows } = await pool.query<PaymentListItem>(
-    `SELECT p.id, p.order_id, p.method, p.status, p.provider_ref, p.amount, p.created_at,
+    `SELECT p.id, p.order_id, p.method, p.status, p.provider, p.provider_ref, p.amount, p.created_at,
             c.full_name AS customer_name
      FROM payments p
      JOIN orders o ON o.id = p.order_id
@@ -31,7 +33,7 @@ export async function getPaymentsByRetailer(
 
 export async function getAllPayments(): Promise<PaymentListItem[]> {
   const { rows } = await pool.query<PaymentListItem>(
-    `SELECT p.id, p.order_id, p.method, p.status, p.provider_ref, p.amount, p.created_at,
+    `SELECT p.id, p.order_id, p.method, p.status, p.provider, p.provider_ref, p.amount, p.created_at,
             c.full_name AS customer_name,
             rt.business_name AS retailer_name
      FROM payments p
@@ -102,4 +104,81 @@ export async function getRevenueByDay(
     revenue: Number(r.revenue),
     orders: Number(r.orders),
   }));
+}
+
+// --- Checkout / charge lifecycle writes --------------------------------
+// createPayment takes an optional transaction-aware `client` since it
+// must run inside placeOrderAction's order+items+payment transaction
+// (lib/actions/checkout.ts) — every other write here runs against the
+// module-level pool since it's a standalone statement.
+
+export async function createPayment(
+  input: {
+    orderId: string;
+    method: PaymentMethod;
+    amount: number;
+    providerRef: string;
+  },
+  client: PoolClient | typeof pool = pool,
+): Promise<{ id: string }> {
+  const { rows } = await client.query<{ id: string }>(
+    `INSERT INTO payments (order_id, method, status, provider_ref, amount)
+     VALUES ($1, $2, 'pending', $3, $4)
+     RETURNING id`,
+    [input.orderId, input.method, input.providerRef, input.amount],
+  );
+  return rows[0];
+}
+
+export async function updatePaymentProviderAttempt(
+  paymentId: string,
+  input: {
+    provider: PaymentProvider;
+    providerTransactionId: string | null;
+    status?: PaymentStatus;
+  },
+): Promise<void> {
+  await pool.query(
+    `UPDATE payments
+     SET provider = $1, provider_transaction_id = $2,
+         status = COALESCE($3, status), updated_at = now()
+     WHERE id = $4`,
+    [input.provider, input.providerTransactionId, input.status ?? null, paymentId],
+  );
+}
+
+// Idempotent by construction — a repeat webhook delivery, or a poll tick
+// racing a webhook, for an already-resolved payment is a silent no-op
+// rather than a double-write.
+export async function updatePaymentStatus(
+  paymentId: string,
+  status: PaymentStatus,
+): Promise<void> {
+  await pool.query(
+    `UPDATE payments SET status = $1, updated_at = now()
+     WHERE id = $2 AND status = 'pending'`,
+    [status, paymentId],
+  );
+}
+
+export async function getPaymentByProviderRef(
+  providerRef: string,
+): Promise<{ id: string; order_id: string; status: PaymentStatus } | null> {
+  const { rows } = await pool.query<{ id: string; order_id: string; status: PaymentStatus }>(
+    "SELECT id, order_id, status FROM payments WHERE provider_ref = $1",
+    [providerRef],
+  );
+  return rows[0] ?? null;
+}
+
+export async function getLatestPaymentForOrder(
+  orderId: string,
+): Promise<PaymentListItem | null> {
+  const { rows } = await pool.query<PaymentListItem>(
+    `SELECT id, order_id, method, status, provider, provider_ref, amount, created_at
+     FROM payments WHERE order_id = $1
+     ORDER BY created_at DESC LIMIT 1`,
+    [orderId],
+  );
+  return rows[0] ?? null;
 }

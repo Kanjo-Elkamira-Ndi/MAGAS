@@ -6,6 +6,8 @@ import { OrderTimeline } from "@/components/dashboard/order-timeline";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { CancelOrderButton } from "@/components/dashboard/cancel-order-button";
 import { DeliveryMap } from "@/components/dashboard/delivery-map";
+import { PaymentStatusPoller } from "@/components/dashboard/payment-status-poller";
+import { RetryPaymentForm } from "@/components/dashboard/retry-payment-form";
 import { requireRole } from "@/lib/auth/session";
 import { formatFcfa, getOrderById } from "@/lib/db/queries/orders";
 import { pool } from "@/lib/db/pool";
@@ -132,6 +134,14 @@ export default async function CustomerOrderDetailPage({
               </div>
             </dl>
           </div>
+
+          {order.payment?.method !== "cod" &&
+            order.payment?.status === "pending" &&
+            order.status === "placed" && <PaymentStatusPoller orderId={order.id} />}
+
+          {order.payment?.method !== "cod" &&
+            order.payment?.status === "failed" &&
+            order.status === "placed" && <RetryPaymentForm orderId={order.id} />}
 
           {order.status === "out_for_delivery" && (
             <DeliveryMap

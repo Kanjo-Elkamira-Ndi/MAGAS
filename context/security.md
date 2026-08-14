@@ -52,16 +52,36 @@
     gated by an ownership check against `order_assignments` so an agent can
     only act on their own assignments.
 
-## Payments — simulated, not a real attack surface yet
+## Payments — real, via NotchPay (primary) + Fapshi (fallback)
 
-- MVP payments are simulated (`/api/payments/simulate`) — no real financial
-  transaction ever occurs, no provider credentials exist in the codebase
-- Even so, treat the `payments` table and its routes with the same care as
-  a real payment system: admin-only reconciliation, no client-writable
-  `status` field, audit via `created_at`/`updated_at`
-- When real MoMo/Orange Money integration begins post-MVP: webhook payloads
-  must be signature-verified per provider docs before trusting them, and
-  provider credentials go in environment variables, never committed
+- Real money moves through this app now. Provider credentials
+  (`NOTCHPAY_SECRET_KEY`, `FAPSHI_API_USER`/`FAPSHI_API_KEY`, webhook
+  secrets) live only in environment variables, never committed —
+  `lib/payments/notchpay.ts`/`fapshi.ts` read them lazily inside the
+  functions that need them, not at import time, so the app keeps working
+  (COD, every other page) with zero payment keys configured.
+- **Webhook payloads are signature-verified before anything is trusted.**
+  `app/api/payments/notchpay/route.ts` and `.../fapshi/route.ts` read the
+  raw request body (`req.text()`, not `.json()` first — verification needs
+  the exact bytes the provider signed), verify the signature, and only
+  then parse/act on the payload. An invalid signature is rejected (`401`)
+  before the DB is ever touched. This is the one route in the app that
+  trusts a verified signature instead of a session/role — see
+  `middleware.ts`'s comment on why `/api/payments/*` is deliberately left
+  out of the auth gate.
+- `payments.status` is never client-writable: `updatePaymentStatus()`
+  only runs from the webhook handlers, the poll fallback
+  (`pollPaymentStatusAction`), and admin's `reconcilePaymentAction` (now
+  server-enforced to `method = 'cod' AND status = 'pending'`, closing a
+  gap where the action previously trusted the UI alone to gate it —
+  a crafted request against a real momo/orange payment id could otherwise
+  fabricate a `success` on money that never arrived).
+- Webhook processing is idempotent (`WHERE status = 'pending'` on every
+  update) — a redelivered webhook, or a poll tick racing a webhook, is a
+  safe no-op rather than a double-write.
+- Checkout (`lib/actions/checkout.ts`) re-fetches every product price
+  server-side and never trusts a client-supplied amount — the payment
+  analog of "no client-writable status."
 
 ## Input handling
 

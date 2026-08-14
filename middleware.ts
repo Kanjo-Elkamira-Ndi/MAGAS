@@ -32,6 +32,14 @@ export default withAuth(
           return false;
         }
 
+        // Payment provider webhooks: intentionally left out of both the
+        // allowlist above and the role-gated map below, so they fall
+        // through to the final `return true` — deliberately public, since
+        // NotchPay/Fapshi have no session/role to present. Each handler
+        // (app/api/payments/notchpay|fapshi/route.ts) verifies the
+        // provider's signature itself instead. Do not "fix" this by
+        // adding auth here — that would break both webhooks.
+
         // Role-gated page routes (parenthesized route groups flatten in URLs).
         const pageRole: Record<string, string> = {
           "/customer": "customer",
