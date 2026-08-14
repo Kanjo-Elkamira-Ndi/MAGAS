@@ -9,7 +9,7 @@ the admin panel) is a low-cost extraction, not a rewrite.
 
 ## Why one app instead of several
 
-Public, customer, retailer, agent (scaffolded), and admin all share the same
+Public, customer, retailer, agent, and admin all share the same
 core domain — users, products, orders, payments. Splitting into multiple
 apps now would mean duplicating types, DB access, and business logic across
 four codebases for no MVP benefit. Route groups plus middleware-based access
@@ -23,13 +23,13 @@ magas/
 │   ├── (public)/                 # marketing site, no auth required
 │   ├── (customer)/               # customer dashboard, protected
 │   ├── (retailer)/               # retailer dashboard, protected
-│   ├── (agent)/                  # SCAFFOLDED ONLY — routes exist, gated off
+│   ├── (agent)/                  # agent dashboard, protected, invite-only signup
 │   ├── (admin)/                  # super admin dashboard, protected
 │   └── api/
 │       ├── auth/[...nextauth]/   # NextAuth route handler
 │       ├── customer/
 │       ├── retailer/
-│       ├── agent/                # stubbed routes — return 501/"not available"
+│       ├── agent/                # unused on purpose — portal ships as Server Actions
 │       ├── admin/
 │       └── payments/simulate/    # simulated payment processor endpoint
 ├── lib/
@@ -82,20 +82,21 @@ authenticated session's `retailer_id`. This is the primary place to enforce
 strict row-level authorization — a retailer must never be able to read or
 mutate another retailer's products, inventory, or orders.
 
-**Delivery Agent** — `(agent)` route group and `/api/agent/*` handlers exist
-as files, but:
-- Pages render a "not yet available" state or are excluded from nav
-- Middleware gates `role === 'agent'` off regardless, since there is currently
-  no way to create a user with that role (no agent registration UI yet)
-- `delivery_agents` and `order_assignments` tables exist now so no migration
-  is needed later — only new pages, a registration/login flow, and lifting
-  the middleware gate
+**Delivery Agent** — `(agent)` route group, gated to `role === 'agent'`.
+Accounts are invite-only: there's no public agent registration, only an
+admin-triggered invite that links a `delivery_agents` contact record to a
+new `users` row (`lib/actions/dashboard.ts`, `lib/db/queries/delivery-agents.ts`).
+Every query is scoped to the signed-in agent's own `delivery_agents.id`
+(`session.user.agentId`) — an agent must never see or act on another
+agent's assignments. `/api/agent/*` stays unconditionally denied in
+`middleware.ts` and its route handler stays a 501 stub — the portal ships
+entirely as Server Actions (`lib/actions/agent.ts`), like every other role.
 
 **Super Admin** — `(admin)` route group, the heaviest surface: user
 management across all roles, retailer approval, product/inventory oversight,
 order-to-retailer assignment, order-to-agent assignment (against real
-`delivery_agents` records, manually, since agents have no self-service
-portal yet), and payment reconciliation.
+`delivery_agents` records), delivery agent login invites, and payment
+reconciliation.
 
 ## Order status state machine
 
@@ -104,8 +105,8 @@ for valid transitions. Referenced by customer views, retailer actions, and
 admin overrides, so no actor re-implements transition logic.
 
 ```
-Placed → Confirmed (by retailer) → Assigned (to agent, admin-only for now)
-       → Out for Delivery → Delivered
+Placed → Confirmed (by retailer) → Assigned (to agent, admin-only)
+       → Out for Delivery → Delivered (agent self-service, or admin override)
        (→ Cancelled / Failed at applicable branch points)
 ```
 
@@ -129,7 +130,6 @@ should not require touching the order state machine.
 ## What NOT to build yet
 
 - Do not implement real MoMo/Orange Money SDK calls or webhooks
-- Do not implement agent-facing login, dashboard, or delivery status updates
 - Do not implement multi-retailer carts
 - Do not implement live map tracking
 

@@ -3,7 +3,7 @@
 
 export type UserRole = "customer" | "retailer" | "agent" | "admin";
 
-export type UserStatus = "active" | "suspended" | "banned";
+export type UserStatus = "active" | "suspended" | "banned" | "pending";
 
 export type OrderStatus =
   | "placed"
@@ -25,7 +25,8 @@ export type AgentStatus = "active" | "inactive";
 export type VerificationPurpose =
   | "email_verify"
   | "phone_verify"
-  | "password_reset";
+  | "password_reset"
+  | "agent_invite";
 
 export type AssignmentStatus = "assigned" | "delivered" | "failed";
 

@@ -1,6 +1,8 @@
 import { pool } from "@/lib/db/pool";
 import type { AgentStatus } from "@/types/db";
 
+export type AgentLoginStatus = "none" | "pending" | "active";
+
 export type DeliveryAgentListItem = {
   id: string;
   name: string;
@@ -8,14 +10,23 @@ export type DeliveryAgentListItem = {
   status: AgentStatus;
   created_at: Date;
   active_assignments: number;
+  user_id: string | null;
+  login_status: AgentLoginStatus;
 };
 
 export async function listDeliveryAgents(): Promise<DeliveryAgentListItem[]> {
   const { rows } = await pool.query<DeliveryAgentListItem>(
     `SELECT da.id, da.name, da.phone, da.status, da.created_at,
             (SELECT COUNT(*) FROM order_assignments oa
-              WHERE oa.agent_id = da.id AND oa.status = 'assigned')::int AS active_assignments
+              WHERE oa.agent_id = da.id AND oa.status = 'assigned')::int AS active_assignments,
+            da.user_id,
+            CASE
+              WHEN u.id IS NULL THEN 'none'
+              WHEN u.status = 'pending' THEN 'pending'
+              ELSE 'active'
+            END AS login_status
      FROM delivery_agents da
+     LEFT JOIN users u ON u.id = da.user_id
      ORDER BY da.created_at DESC`,
   );
   return rows;

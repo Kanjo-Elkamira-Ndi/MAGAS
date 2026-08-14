@@ -27,18 +27,30 @@
 - Row-level scoping: retailer and customer queries always filter by the
   session's own ID in SQL, never by trusting a client-supplied ID
 
-## The dormant Agent role — explicit rules
+## The Agent role — live, invite-only
 
-- `role = 'agent'` exists in the `users` enum and `delivery_agents` /
-  `order_assignments` tables exist, but:
-  - There is **no registration flow** that creates a `users` row with
-    `role = 'agent'`
-  - `(agent)/*` pages and `api/agent/*` routes are stubs that return a
-    "not available" state regardless of any other condition
-  - `middleware.ts` denies `role === 'agent'` access unconditionally for now
-- Do not build out agent login, agent dashboards, or agent-facing status
-  updates without an explicit go-ahead — this is a deliberate MVP boundary,
-  not an oversight
+- `role = 'agent'` exists in the `users` enum and the `delivery_agents` /
+  `order_assignments` tables back it. The agent portal now ships:
+  - **No public self-registration.** A `users` row with `role = 'agent'` is
+    only ever created by an admin-triggered invite (`inviteAgentAction` in
+    `lib/actions/dashboard.ts`), which links an existing `delivery_agents`
+    contact record to a login via a `verification_tokens` row (purpose
+    `agent_invite`). The account sits in `status = 'pending'` — unable to
+    sign in — until the invitee sets their own password at
+    `/agent-invite/[token]` (`lib/actions/agent.ts`,
+    `activateAgentAccountAction`), which flips it to `active`.
+  - `(agent)/*` pages are real: login, an assigned-orders overview and list,
+    and order-detail status updates, scoped to the signed-in agent's own
+    `delivery_agents` row (`session.user.agentId`).
+  - `api/agent/*` **stays denied** in `middleware.ts` and the route handler
+    stays a 501 stub — the portal ships as Server Actions
+    (`lib/actions/agent.ts`), like every other role's mutations, so this
+    REST surface is intentionally left dead rather than activated.
+  - Status transitions (`out_for_delivery`/`delivered`/`failed`) route
+    through the same `lib/orders/status.ts` transition map and
+    `lib/orders/order-actions.ts` functions the admin flow already used,
+    gated by an ownership check against `order_assignments` so an agent can
+    only act on their own assignments.
 
 ## Payments — simulated, not a real attack surface yet
 

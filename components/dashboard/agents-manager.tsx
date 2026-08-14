@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +23,19 @@ import {
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/dashboard/confirm-dialog";
 import { DataTable, type DataColumn } from "@/components/dashboard/data-table";
-import { deleteAgentAction, upsertAgentAction } from "@/lib/actions/dashboard";
+import {
+  deleteAgentAction,
+  inviteAgentAction,
+  upsertAgentAction,
+} from "@/lib/actions/dashboard";
 import type { DeliveryAgentListItem } from "@/lib/db/queries/agents";
 import type { AgentStatus } from "@/types/db";
+
+const LOGIN_LABEL: Record<DeliveryAgentListItem["login_status"], string> = {
+  none: "No login",
+  pending: "Invited",
+  active: "Active login",
+};
 
 type AgentForm = {
   id?: string;
@@ -71,6 +81,24 @@ const COLUMNS: DataColumn<DeliveryAgentListItem>[] = [
     cell: (a) => <span className="text-sm">{a.active_assignments}</span>,
   },
   {
+    key: "login_status",
+    header: "Login",
+    cell: (a) => (
+      <Badge
+        variant="outline"
+        className={
+          a.login_status === "active"
+            ? "border-transparent bg-success text-success-foreground"
+            : a.login_status === "pending"
+              ? "border-transparent bg-warning text-warning-foreground"
+              : "border-transparent bg-muted text-muted-foreground"
+        }
+      >
+        {LOGIN_LABEL[a.login_status]}
+      </Badge>
+    ),
+  },
+  {
     key: "created_at",
     header: "Added",
     cell: (a) => (
@@ -87,6 +115,10 @@ export function AgentsManager({ agents }: { agents: DeliveryAgentListItem[] }) {
   const [editing, setEditing] = useState<DeliveryAgentListItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<DeliveryAgentListItem | null>(null);
+  const [inviting, setInviting] = useState<DeliveryAgentListItem | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState<AgentForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,6 +148,29 @@ export function AgentsManager({ agents }: { agents: DeliveryAgentListItem[] }) {
     });
   }
 
+  function openInvite(a: DeliveryAgentListItem) {
+    setInviting(a);
+    setInviteUrl(null);
+    setInviteError(null);
+    setCopied(false);
+    startTransition(async () => {
+      try {
+        const { inviteUrl: url } = await inviteAgentAction(a.id);
+        setInviteUrl(url);
+        router.refresh();
+      } catch (err) {
+        setInviteError(err instanceof Error ? err.message : "Could not create an invite.");
+      }
+    });
+  }
+
+  async function copyInviteUrl() {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex justify-end">
@@ -134,6 +189,16 @@ export function AgentsManager({ agents }: { agents: DeliveryAgentListItem[] }) {
             className: "text-right",
             cell: (a) => (
               <div className="flex justify-end gap-1">
+                {a.login_status !== "active" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openInvite(a)}
+                    title={a.login_status === "pending" ? "Resend invite link" : "Invite to login"}
+                  >
+                    <Send aria-hidden="true" className="size-4" />
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>
                   <Pencil aria-hidden="true" className="size-4" />
                 </Button>
@@ -156,7 +221,7 @@ export function AgentsManager({ agents }: { agents: DeliveryAgentListItem[] }) {
         defaultSort={{ key: "name", dir: "asc" }}
         empty={{
           title: "No delivery agents",
-          description: "Agents are plain contact records today — they get login access when the agent portal ships.",
+          description: "Add a contact record, then invite them to log in and see their own assigned deliveries.",
           action: (
             <Button size="sm" variant="outline" onClick={openCreate}>
               <Plus aria-hidden="true" className="size-4" />
@@ -174,7 +239,7 @@ export function AgentsManager({ agents }: { agents: DeliveryAgentListItem[] }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit agent" : "Add delivery agent"}</DialogTitle>
             <DialogDescription>
-              A contact record for an order runner. Login access arrives with the agent portal.
+              A contact record for an order runner. Invite them separately once they&apos;re added to give them a login.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
@@ -254,6 +319,41 @@ export function AgentsManager({ agents }: { agents: DeliveryAgentListItem[] }) {
           });
         }}
       />
+
+      <Dialog open={inviting !== null} onOpenChange={(o) => !o && setInviting(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite {inviting?.name}</DialogTitle>
+            <DialogDescription>
+              There&apos;s no email set up to send this automatically — copy the
+              link below and share it with the agent yourself. It expires in
+              7 days.
+            </DialogDescription>
+          </DialogHeader>
+          {inviteError ? (
+            <p className="text-sm text-destructive">{inviteError}</p>
+          ) : !inviteUrl ? (
+            <p className="text-sm text-muted-foreground">Creating invite link…</p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Input readOnly value={inviteUrl} className="font-mono text-xs" />
+              <Button size="sm" variant="outline" onClick={copyInviteUrl}>
+                {copied ? (
+                  <Check aria-hidden="true" className="size-4" />
+                ) : (
+                  <Copy aria-hidden="true" className="size-4" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setInviting(null)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

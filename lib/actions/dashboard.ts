@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getSession } from "@/lib/auth/session";
@@ -28,6 +29,7 @@ import {
   listDeliveryAgents,
   updateDeliveryAgent,
 } from "@/lib/db/queries/agents";
+import { createAgentInvite } from "@/lib/db/queries/delivery-agents";
 import { updateUserStatus } from "@/lib/db/queries/users";
 import { updateRetailerStatus } from "@/lib/db/queries/retailers";
 import { pool } from "@/lib/db/pool";
@@ -288,6 +290,31 @@ export async function deleteAgentAction(agentId: string) {
   if (session?.user?.role !== "admin") roleError();
   await deleteDeliveryAgent(orderIdSchema.parse(agentId));
   revalidatePath("/admin/agents");
+}
+
+// Generates a set-password link for an agent contact record rather than
+// emailing it — this app has no email-sending infra yet (register and
+// password-reset are themselves still 501 stubs for the same reason), so
+// the admin copies/shares the link manually.
+export async function inviteAgentAction(agentId: string) {
+  const session = await getSession();
+  if (session?.user?.role !== "admin") roleError();
+  const id = orderIdSchema.parse(agentId);
+
+  const agents = await listDeliveryAgents();
+  const agent = agents.find((a) => a.id === id);
+  if (!agent) roleError();
+  if (agent.login_status === "active") {
+    throw new Error("This agent already has an active login.");
+  }
+
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await createAgentInvite(id, token, expiresAt);
+
+  revalidatePath("/admin/agents");
+  const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  return { inviteUrl: `${base}/agent-invite/${token}` };
 }
 
 // ---------------------------------------------------------------------------

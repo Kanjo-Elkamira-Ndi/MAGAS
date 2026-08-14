@@ -56,13 +56,14 @@ cancelled   failed
 - **placed → confirmed**: retailer action
   (`POST /api/retailer/orders/:id/accept`) or **placed → cancelled/failed**
   (`.../reject`, or customer cancel while still `placed`)
-- **confirmed → assigned**: admin action only for MVP
+- **confirmed → assigned**: admin action only
   (`POST /api/admin/orders/:id/assign-agent`), assigning to a
-  `delivery_agents` record (contact-only, no agent login yet)
-- **assigned → out_for_delivery → delivered**: for MVP, since the agent
-  portal doesn't exist, these transitions are also admin-triggered manual
-  overrides (`.../override-status`) until the agent portal ships — do not
-  invent an automatic transition here
+  `delivery_agents` record
+- **assigned → out_for_delivery → delivered**: agent self-service, scoped to
+  the agent's own assignment (`lib/actions/agent.ts`). Admin retains a manual
+  override path for the same transitions (`.../override-status`) for cases
+  the agent can't act (e.g. no working phone) — both routes go through the
+  same shared state machine, so neither can produce an illegal transition
 - Every transition must go through the shared state machine function, which
   validates that the attempted transition is legal from the current state —
   reject illegal transitions (e.g. `delivered → confirmed`) at the function
@@ -104,15 +105,20 @@ cancelled   failed
 2. Assigns unconfirmed/confirmed orders to retailers where needed (e.g. if
    the customer's chosen retailer rejected, admin reassigns)
 3. Assigns confirmed orders to a delivery agent record
-4. Manually progresses delivery status (workflow 4) since the agent portal
-   is dormant
+4. Can manually override delivery status (workflow 4) if an agent can't do
+   it themselves
 5. Reconciles COD payments; reviews simulated MoMo/Orange payment records
-6. Manages retailer approval queue, user suspension, and delivery agent
-   contact records
+6. Manages retailer approval queue, user suspension, delivery agent contact
+   records, and delivery agent login invites (`inviteAgentAction`)
 
-## 8. Agent workflow — NOT IMPLEMENTED
+## 8. Agent workflow
 
-There is currently no agent-facing workflow. If a task description implies
-building one (e.g. "let the agent mark delivery as complete"), stop and
-confirm scope before proceeding — this is a deliberate MVP boundary per
-`architecture.md` and `security.md`.
+1. Admin invites an existing `delivery_agents` contact to a login
+   (`inviteAgentAction`); the agent sets their own password at
+   `/agent-invite/[token]` and signs in
+2. Agent views their assigned orders — active and history — on `/agent` and
+   `/agent/orders`
+3. Agent progresses their own assignments through
+   `assigned → out_for_delivery → delivered` (or `→ failed`) from
+   `/agent/order/[orderId]`, scoped to their own `delivery_agents.id`
+   (`lib/actions/agent.ts`)

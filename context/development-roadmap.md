@@ -42,11 +42,21 @@ to a later phase's work while an earlier phase's foundation is incomplete.
 - Retailer approval workflow
 - Cross-retailer product oversight
 - Order assignment to retailer (manual reassignment path)
-- Delivery agent **record** management (`delivery_agents` — contact-only,
-  no login) — schema and CRUD, per `database-schema.md`
+- Delivery agent record management (`delivery_agents`) — schema and CRUD,
+  per `database-schema.md`
+- Delivery agent login invites, linking a `delivery_agents` record to a
+  `users` row via a one-time set-password link
 - Order assignment to agent record (`order_assignments`)
-- Manual delivery status overrides (since agent portal is dormant)
+- Manual delivery status override path, alongside agent self-service
 - Payment records view + COD reconciliation
+
+## Phase 4b — Delivery agent portal
+- Agent login via admin-issued invite only (no public registration)
+- Agent overview + assigned-order list (`/agent`, `/agent/orders`), active
+  and history
+- Agent self-service status updates on their own assignments
+  (`assigned → out_for_delivery → delivered`, or `→ failed`), through the
+  shared `lib/orders/status.ts` state machine
 
 ## Phase 5 — Hardening & MVP launch readiness
 - Full RBAC review across all routes (not just pages) per `security.md`
@@ -60,10 +70,6 @@ to a later phase's work while an earlier phase's foundation is incomplete.
 
 ## Explicitly deferred (post-MVP — do not start early)
 
-- **Delivery agent portal**: `(agent)/*` pages, `/api/agent/*` real logic,
-  agent registration/login. Schema already exists (`delivery_agents.user_id`
-  nullable, `order_assignments`) so this ships without a migration — see
-  `architecture.md`
 - **Real payment integration**: MTN MoMo Open API, Orange Money Web Payment
   API — requires merchant/collection account setup with the providers,
   which the client should start in parallel since approval can take days.

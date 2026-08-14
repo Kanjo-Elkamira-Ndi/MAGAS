@@ -68,6 +68,24 @@ export async function getOrdersByRetailer(
   return rows;
 }
 
+export async function getOrdersByAgent(
+  agentId: string,
+  limit = 100,
+): Promise<OrderListItem[]> {
+  // order_assignments only ever holds the current assignment for an order
+  // (assignOrderToAgent replaces rather than appends), so this can't
+  // double-count an order across reassignments.
+  const { rows } = await pool.query<OrderListItem>(
+    `${ORDER_LIST_SELECT}
+     JOIN order_assignments oa ON oa.order_id = o.id
+     WHERE oa.agent_id = $1
+     ORDER BY o.created_at DESC
+     LIMIT $2`,
+    [agentId, limit],
+  );
+  return rows;
+}
+
 export async function getLatestOrders(limit = 10): Promise<OrderListItem[]> {
   const { rows } = await pool.query<OrderListItem>(
     `${ORDER_LIST_SELECT}
@@ -126,6 +144,35 @@ export async function getRetailerStats(retailerId: string) {
     pending: Number(row?.pending ?? 0),
     outForDelivery: Number(row?.out_for_delivery ?? 0),
     revenueToday: Number(row?.revenue_today ?? 0),
+  };
+}
+
+export async function getAgentStats(agentId: string) {
+  const { rows } = await pool.query<{
+    active: string;
+    delivered_today: string;
+    delivered_total: string;
+    failed: string;
+  }>(
+    `SELECT
+       (SELECT COUNT(*) FROM order_assignments
+         WHERE agent_id = $1 AND status = 'assigned')::int AS active,
+       (SELECT COUNT(*) FROM order_assignments oa
+         JOIN orders o ON o.id = oa.order_id
+         WHERE oa.agent_id = $1 AND oa.status = 'delivered'
+           AND o.updated_at::date = current_date)::int AS delivered_today,
+       (SELECT COUNT(*) FROM order_assignments
+         WHERE agent_id = $1 AND status = 'delivered')::int AS delivered_total,
+       (SELECT COUNT(*) FROM order_assignments
+         WHERE agent_id = $1 AND status = 'failed')::int AS failed`,
+    [agentId],
+  );
+  const row = rows[0];
+  return {
+    active: Number(row?.active ?? 0),
+    deliveredToday: Number(row?.delivered_today ?? 0),
+    deliveredTotal: Number(row?.delivered_total ?? 0),
+    failed: Number(row?.failed ?? 0),
   };
 }
 

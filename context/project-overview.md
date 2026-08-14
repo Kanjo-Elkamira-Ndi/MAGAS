@@ -14,13 +14,8 @@ admin, plus a public marketing site for discovery and SEO.
 | Public / Guest | Live | Unauthenticated visitor — marketing site, read-only retailer/product browsing |
 | Customer | Live | Registers, browses retailers/products, places orders, tracks status, pays |
 | Retailer | Live | Manages own products/inventory, accepts/rejects assigned orders |
-| Delivery Agent | **Scaffolded, not implemented** | Routes, DB tables, and API stubs exist; portal is dormant until a later phase |
-| Super Admin | Live | Manages all accounts, assigns orders to retailers, manages delivery agent *records*, reconciles payments |
-
-> Important for the coding agent: the Agent actor is intentionally incomplete.
-> Do not build agent-facing UI/auth flows unless explicitly instructed — only
-> keep the schema and stub routes in place so the feature can be switched on
-> later without a migration.
+| Delivery Agent | Live | Invite-only login (admin-linked, no self-registration); sees own assigned orders and updates delivery status |
+| Super Admin | Live | Manages all accounts, assigns orders to retailers, manages delivery agent records and invites their logins, reconciles payments |
 
 ## Problem being solved
 
@@ -37,14 +32,14 @@ already use daily (Cash on Delivery, MTN Mobile Money, Orange Money).
 - Customer registration/login, browsing, ordering, order tracking, profile
 - Retailer dashboard: product/inventory CRUD, order accept/reject
 - Super admin dashboard: user management, retailer approval, order assignment,
-  delivery agent *record* management (not agent login), payment reconciliation
+  delivery agent record management and login invites, payment reconciliation
+- Delivery agent dashboard: login (via admin invite), assigned-order list,
+  self-service delivery status updates
 - Simulated payments (COD is real/manual; MoMo and Orange Money are simulated,
   not integrated with live provider APIs)
 - Order status tracking through a shared state machine
 
 **Explicitly out of scope for MVP:**
-- Delivery agent login/portal (scaffolded only — see `security.md` and
-  `database-schema.md` for what exists vs. what's dormant)
 - Real MTN Mobile Money / Orange Money API integration (simulated only —
   see `workflows.md` for the swap-in contract)
 - Live map-based delivery tracking

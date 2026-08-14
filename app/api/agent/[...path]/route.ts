@@ -1,13 +1,15 @@
 import { errorResponse, ErrorCodes } from "@/types/api";
 
-// Agent portal routes are deliberately dormant per context/security.md.
-// These stubs return 501 regardless of any other condition — the schema
-// and routes exist so the feature can ship without a migration later.
+// The agent portal itself is live (see app/agent/*, lib/actions/agent.ts),
+// but it ships entirely as Server Actions, like every other role's
+// mutations — this REST surface stays deliberately dead rather than wired
+// up, so it isn't a second, less-reviewed way to reach agent data.
+// middleware.ts denies /api/agent/* unconditionally ahead of this handler.
 
 export async function GET() {
   return errorResponse(
     ErrorCodes.AGENT_PORTAL_NOT_AVAILABLE,
-    "The delivery agent portal is not yet available. See context/security.md.",
+    "This REST endpoint is not used — the agent portal runs on Server Actions.",
     501,
   );
 }
@@ -15,7 +17,7 @@ export async function GET() {
 export async function POST() {
   return errorResponse(
     ErrorCodes.AGENT_PORTAL_NOT_AVAILABLE,
-    "The delivery agent portal is not yet available. See context/security.md.",
+    "This REST endpoint is not used — the agent portal runs on Server Actions.",
     501,
   );
 }

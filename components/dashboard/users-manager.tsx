@@ -21,6 +21,9 @@ const STATUS_STYLE: Record<UserStatus, string> = {
   active: "border-transparent bg-success text-success-foreground",
   suspended: "border-transparent bg-warning text-warning-foreground",
   banned: "border-transparent bg-destructive text-destructive-foreground",
+  // Invited agent accounts that haven't set a password yet — distinct from
+  // a punitive suspension. See lib/db/migrations/003_agent_invite.sql.
+  pending: "border-transparent bg-info text-info-foreground",
 };
 
 type PendingAction = { user: AdminUserListItem; status: UserStatus } | null;
@@ -99,7 +102,19 @@ export function UsersManager({ users }: { users: AdminUserListItem[] }) {
             className: "text-right",
             cell: (u) => (
               <div className="flex justify-end gap-1">
-                {u.status === "banned" ? (
+                {u.status === "pending" ? (
+                  // Set via the delivery-agent invite link, not here — an
+                  // admin can still revoke the invite by banning it.
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    disabled={pending}
+                    onClick={() => apply(u, "banned")}
+                  >
+                    Revoke
+                  </Button>
+                ) : u.status === "banned" ? (
                   <Button
                     size="sm"
                     variant="outline"

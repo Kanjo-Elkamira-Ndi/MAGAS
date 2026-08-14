@@ -17,16 +17,17 @@ export default withAuth(
           path.startsWith("/register") ||
           path.startsWith("/forgot-password") ||
           path.startsWith("/reset-password") ||
+          path.startsWith("/agent-invite") ||
           path.startsWith("/api/auth") ||
           path.startsWith("/api/public")
         ) {
           return true;
         }
 
-        // Agent API: UNCONDITIONALLY denied. This is a deliberate MVP
-        // boundary per security.md — no agent login flow ships yet, so no
-        // agent data is ever exposed. The /agent *page* is role-gated below
-        // so an authenticated agent lands on the "coming soon" placeholder.
+        // Agent API: UNCONDITIONALLY denied. The agent portal itself ships
+        // as Server Actions (lib/actions/agent.ts), same as every other
+        // role's mutations — this REST surface stays intentionally dead so
+        // it isn't a second, unreviewed way in.
         if (path.startsWith("/api/agent")) {
           return false;
         }

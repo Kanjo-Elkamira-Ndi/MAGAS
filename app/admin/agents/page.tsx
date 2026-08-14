@@ -14,7 +14,7 @@ export default async function AdminAgentsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Delivery agents"
-        description="Agent records are plain contacts today. When the agent portal ships, these get login access and live assignments."
+        description="Manage contact records and invite agents to log in and manage their own deliveries."
       />
       <AgentsManager agents={agents} />
     </div>

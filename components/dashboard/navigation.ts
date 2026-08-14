@@ -110,6 +110,10 @@ export const AGENT_NAV: DashboardSection[] = [
     title: "General",
     items: [{ href: "/agent", label: "Overview", icon: Home }],
   },
+  {
+    title: "Deliveries",
+    items: [{ href: "/agent/orders", label: "Orders", icon: Truck }],
+  },
 ];
 
 // Icons are component references and cannot cross the server->client prop

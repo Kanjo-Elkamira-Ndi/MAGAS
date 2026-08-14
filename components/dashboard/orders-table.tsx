@@ -22,6 +22,15 @@ const STATUS_TABS: OrderStatus[] = [
   "failed",
 ];
 
+// Agents only ever hold assignments in these statuses — the earlier
+// statuses (placed/confirmed) and cancelled would always show a zero tab.
+const AGENT_STATUS_TABS: OrderStatus[] = [
+  "assigned",
+  "out_for_delivery",
+  "delivered",
+  "failed",
+];
+
 function customerNameCell(o: OrderListItem) {
   return (
     <div>
@@ -54,7 +63,9 @@ function retailerNameCell(o: OrderListItem) {
   );
 }
 
-function orderColumns(role: "customer" | "retailer" | "admin"): DataColumn<OrderListItem>[] {
+function orderColumns(
+  role: "customer" | "retailer" | "admin" | "agent",
+): DataColumn<OrderListItem>[] {
   return [
     {
       key: "id",
@@ -100,13 +111,14 @@ export function OrdersDataTable({
   data,
   showStatusFilter = true,
 }: {
-  role: "customer" | "retailer" | "admin";
+  role: "customer" | "retailer" | "admin" | "agent";
   data: OrderListItem[];
   showStatusFilter?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [selected, setSelected] = useState<OrderListItem | null>(null);
+  const tabs = role === "agent" ? AGENT_STATUS_TABS : STATUS_TABS;
 
   const filtered =
     filter === "all" ? data : data.filter((o) => o.status === filter);
@@ -118,6 +130,8 @@ export function OrdersDataTable({
   function handleRowClick(o: OrderListItem) {
     if (role === "customer") {
       router.push(`/customer/order/${o.id}`);
+    } else if (role === "agent") {
+      router.push(`/agent/order/${o.id}`);
     } else {
       setSelected(o);
     }
@@ -128,7 +142,7 @@ export function OrdersDataTable({
       {showStatusFilter && (
         <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Filter by status">
           <FilterTab active={filter === "all"} label="All" count={data.length} onClick={() => setFilter("all")} />
-          {STATUS_TABS.map((s) => (
+          {tabs.map((s) => (
             <FilterTab
               key={s}
               active={filter === s}
@@ -159,12 +173,14 @@ export function OrdersDataTable({
         }}
         rowClick={handleRowClick}
       />
-      <OrderDialog
-        open={selected !== null}
-        onOpenChange={(o) => !o && setSelected(null)}
-        orderId={selected?.id ?? ""}
-        role={role}
-      />
+      {role !== "agent" && (
+        <OrderDialog
+          open={selected !== null}
+          onOpenChange={(o) => !o && setSelected(null)}
+          orderId={selected?.id ?? ""}
+          role={role}
+        />
+      )}
     </div>
   );
 }

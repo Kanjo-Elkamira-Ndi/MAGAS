@@ -3,19 +3,19 @@
 MAGAS is a gas cylinder ordering and delivery platform for Cameroonian
 customers, connecting them with local gas retailers. Customers browse
 retailers and products, place orders, choose a payment method, and track
-delivery progress. Retailers manage their own listings and orders. A super
-admin oversees the whole marketplace. A delivery agent portal is planned
-but not yet part of the MVP.
+delivery progress. Retailers manage their own listings and orders. Delivery
+agents, invited by admin, see their assigned orders and update delivery
+status themselves. A super admin oversees the whole marketplace.
 
 ## Actors
 
 - **Public** — marketing site, retailer/product browsing (no login)
 - **Customer** — registers, orders, tracks delivery
 - **Retailer** — manages products/inventory, accepts/rejects orders
-- **Delivery Agent** — *scaffolded only, not yet live* (schema and stub
-  routes exist for a future release)
+- **Delivery Agent** — invite-only login (admin links an existing contact
+  record to a login); views and updates their own assigned deliveries
 - **Super Admin** — manages users, retailers, order assignment, delivery
-  agent records, and payment reconciliation
+  agent records and login invites, and payment reconciliation
 
 ## Tech stack
 
@@ -33,10 +33,10 @@ but not yet part of the MVP.
   manually by admin reconciliation; MTN Mobile Money and Orange Money are
   simulated via a mock processor, not integrated with live provider APIs.
   See `context/workflows.md` for the swap-in plan.
-- The delivery agent portal is **not implemented**. Database tables and
-  stub API routes exist so it can be added later without a schema
-  migration, but there is no agent login or dashboard yet. See
-  `context/architecture.md` and `context/security.md`.
+- The delivery agent portal is invite-only: there's no public
+  self-registration for the `agent` role. Admin invites an existing
+  `delivery_agents` contact from `/admin/agents`; the agent sets their own
+  password via a one-time link. See `context/security.md`.
 
 ## Getting started
 
@@ -61,7 +61,7 @@ Full context for contributors and AI coding agents lives in [`/context`](./conte
 | [`api-reference.md`](./context/api-reference.md) | All API routes by actor |
 | [`file-structure.md`](./context/file-structure.md) | Repo layout and where new files belong |
 | [`code-standards.md`](./context/code-standards.md) | Conventions, DB access rules, error handling |
-| [`security.md`](./context/security.md) | Auth, RBAC, session strategy, dormant-agent rules |
+| [`security.md`](./context/security.md) | Auth, RBAC, session strategy, agent-invite rules |
 | [`ui-context.md`](./context/ui-context.md) | Design system, components, status badges |
 | [`workflows.md`](./context/workflows.md) | Ordering, payment, and status-transition flows |
 | [`development-roadmap.md`](./context/development-roadmap.md) | Build phases, what's deferred |
