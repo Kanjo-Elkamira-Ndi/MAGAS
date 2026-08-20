@@ -55,18 +55,22 @@
 ## Payments — real, via NotchPay (primary) + Fapshi (fallback)
 
 - Real money moves through this app now. Provider credentials
-  (`NOTCHPAY_SECRET_KEY`, `FAPSHI_API_USER`/`FAPSHI_API_KEY`, webhook
-  secrets) live only in environment variables, never committed —
-  `lib/payments/notchpay.ts`/`fapshi.ts` read them lazily inside the
-  functions that need them, not at import time, so the app keeps working
-  (COD, every other page) with zero payment keys configured.
-- **Webhook payloads are signature-verified before anything is trusted.**
-  `app/api/payments/notchpay/route.ts` and `.../fapshi/route.ts` read the
-  raw request body (`req.text()`, not `.json()` first — verification needs
-  the exact bytes the provider signed), verify the signature, and only
-  then parse/act on the payload. An invalid signature is rejected (`401`)
-  before the DB is ever touched. This is the one route in the app that
-  trusts a verified signature instead of a session/role — see
+  (`NOTCHPAY_PUBLIC_KEY`/`NOTCHPAY_SECRET_KEY`, `FAPSHI_API_USER`/
+  `FAPSHI_API_KEY`, both webhook secrets) live only in environment
+  variables, never committed — `lib/payments/notchpay.ts`/`fapshi.ts`
+  read them lazily inside the functions that need them, not at import
+  time, so the app keeps working (COD, every other page) with zero
+  payment keys configured.
+- **Webhook payloads are verified before anything is trusted.**
+  `app/api/payments/fapshi/route.ts` reads the raw request body
+  (`req.text()`, not `.json()` first) and checks the `x-wh-secret` header
+  against `FAPSHI_WEBHOOK_SECRET` with a constant-time equality
+  comparison (Fapshi's own scheme — a shared secret, not HMAC).
+  `.../notchpay/route.ts` verifies an HMAC-SHA256 signature in the
+  `x-notch-signature` header against `NOTCHPAY_WEBHOOK_SECRET` instead
+  (its own scheme). Either way, an invalid check is rejected (`401`)
+  before the DB is ever touched. These are the one route pair in the app
+  that trusts a verified webhook check instead of a session/role — see
   `middleware.ts`'s comment on why `/api/payments/*` is deliberately left
   out of the auth gate.
 - `payments.status` is never client-writable: `updatePaymentStatus()`

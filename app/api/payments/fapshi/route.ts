@@ -7,11 +7,16 @@ import type { PaymentStatus } from "@/types/db";
 // comment on why /api/payments/* has no auth gate — this route trusts a
 // verified signature instead of a session/role.
 //
-// Header name and payload shape below follow Fapshi's publicly known
-// pattern, NOT a confirmed spec — verify against Fapshi's current
-// webhook docs (including whether they sign with HMAC or a shared
-// secret) before relying on this in production.
-const SIGNATURE_HEADER = "x-fapshi-signature";
+// Verified against Fapshi's own docs (docs.fapshi.com/en/api-reference/
+// endpoint/webhook): the webhook secret configured per-service in the
+// dashboard is sent back as the `x-wh-secret` header, checked via a
+// constant-time equality comparison in verifyWebhookSignature — not
+// HMAC. Payload fields match the /payment-status response shape
+// (externalId, status, etc). Important operational note: Fapshi sends
+// exactly one webhook attempt per event and does NOT retry on failure —
+// components/dashboard/payment-status-poller.tsx's poll fallback is
+// what catches anything this handler misses.
+const SIGNATURE_HEADER = "x-wh-secret";
 
 function mapStatus(raw: string | undefined): PaymentStatus | null {
   if (raw === "SUCCESSFUL") return "success";

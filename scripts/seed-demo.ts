@@ -9,8 +9,7 @@ import type { UserRole } from "@/types/db";
 //
 // Credentials (all passwords end in -Magas-2026!):
 //   Admin:    admin@magas.test    / Admin-Magas-2026!
-//   Customer: customer@magas.test / Customer-Magas-2026!
-//   Retailer: retailer@magas.test / Retailer-Magas-2026!
+//   Customer: customer@magas.test / 3//   Retailer: retailer@magas.test / Retailer-Magas-2026!
 //   Agent:    agent@magas.test    / Agent-Magas-2026!
 // ---------------------------------------------------------------------------
 

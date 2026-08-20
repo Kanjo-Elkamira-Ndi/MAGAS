@@ -9,11 +9,12 @@ import {
 
 // Primary + fallback orchestrator: tries NotchPay first, falls through to
 // Fapshi only when NotchPay is *unavailable* (ProviderUnavailableError —
-// network/timeout/5xx/auth failure), never on a clean decline (a decline
-// is a real, final result from that provider, not a reason to try the
-// other one). Pure orchestration, no DB access — keeps it easy to reason
-// about and the natural place for a unit test if this repo ever adds a
-// test runner (it currently has none).
+// network/timeout/5xx/auth failure, or a missing credential, which both
+// provider clients now also treat as "unavailable" rather than crashing),
+// never on a clean decline (a decline is a real, final result from that
+// provider, not a reason to try the other one). Pure orchestration, no DB
+// access — keeps it easy to reason about and the natural place for a unit
+// test if this repo ever adds a test runner (it currently has none).
 export async function chargeOrder(
   input: ChargeInitiationInput,
 ): Promise<ChargeInitiationResult> {

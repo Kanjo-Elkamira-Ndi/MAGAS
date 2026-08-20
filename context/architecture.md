@@ -122,9 +122,17 @@ of how it was paid.
 
 - `lib/payments/charge.ts`'s `chargeOrder()` orchestrates a primary
   (NotchPay) + fallback (Fapshi) charge: falls through to Fapshi only on
-  `ProviderUnavailableError` (network/timeout/5xx/auth), never on a clean
-  decline. `lib/payments/notchpay.ts` / `fapshi.ts` each implement
-  `initiateCharge` / `verifyWebhookSignature` / `getChargeStatus`.
+  `ProviderUnavailableError` (network/timeout/5xx/auth, or a missing
+  credential — both clients check `requireEnv()` inside their try block
+  so a misconfigured provider degrades to "unavailable" instead of
+  crashing checkout), never on a clean decline. `lib/payments/notchpay.ts`
+  / `fapshi.ts` each implement `initiateCharge` / `verifyWebhookSignature`
+  / `getChargeStatus`, both verified against each provider's own docs
+  (`developer.notchpay.co`, `docs.fapshi.com`). NotchPay's charge is a
+  two-step flow (initialize → process against a mobile money channel)
+  with two specific points that stayed ambiguous even in their own docs
+  — flagged inline at the top of `notchpay.ts` rather than guessed
+  silently.
 - Resolution is asynchronous: `app/api/payments/notchpay/route.ts` and
   `.../fapshi/route.ts` are real webhook receivers (the one exception to
   this app's Server-Actions-only convention — an external service needs a

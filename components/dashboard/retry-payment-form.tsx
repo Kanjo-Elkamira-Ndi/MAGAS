@@ -13,7 +13,13 @@ import { retryPaymentAction } from "@/lib/actions/payments";
 // anywhere, and the customer may want to try a different number/provider
 // account) and re-runs the charge orchestrator, which inserts a brand
 // new payments row — full attempt history stays intact.
-export function RetryPaymentForm({ orderId }: { orderId: string }) {
+export function RetryPaymentForm({
+  orderId,
+  failureReason,
+}: {
+  orderId: string;
+  failureReason?: string | null;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [phone, setPhone] = useState("");
@@ -47,7 +53,9 @@ export function RetryPaymentForm({ orderId }: { orderId: string }) {
     >
       <p className="text-sm font-semibold text-destructive">Payment failed</p>
       <p className="text-xs text-muted-foreground">
-        Your order is still here — retry the payment when you&apos;re ready.
+        {failureReason
+          ? `${failureReason} Your order is still here — retry the payment when you're ready.`
+          : "Your order is still here — retry the payment when you're ready."}
       </p>
       <div className="flex items-end gap-2">
         <div className="flex-1">

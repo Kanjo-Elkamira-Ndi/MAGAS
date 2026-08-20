@@ -77,18 +77,26 @@ cancelled   failed
    with a reference (`provider_ref`) generated *before* any provider is
    contacted, so a fast webhook can never race ahead of the row existing.
 2. After the transaction commits, `lib/payments/charge.ts`'s `chargeOrder()`
-   tries **NotchPay** first; only if NotchPay is unavailable (network/
-   timeout/5xx/auth failure — never a clean decline) does it fall through
-   to **Fapshi**. Whichever provider is used gets recorded on the payment
-   row (`payments.provider`).
+   tries **NotchPay** first (a two-step initialize-then-process flow,
+   verified against `developer.notchpay.co` — see `lib/payments/notchpay.ts`
+   for two specific points that stayed ambiguous even in NotchPay's own
+   docs); only if NotchPay is unavailable (network/timeout/5xx/auth
+   failure, or a missing credential — never a clean decline) does it fall
+   through to **Fapshi** (`POST /direct-pay`, verified against
+   `docs.fapshi.com`). Whichever provider is used gets recorded on the
+   payment row (`payments.provider`).
 3. Resolution arrives one of two ways: a webhook
-   (`app/api/payments/notchpay/route.ts` or `.../fapshi/route.ts`,
-   signature-verified, deliberately unauthenticated per `middleware.ts`'s
+   (`app/api/payments/fapshi/route.ts` or `.../notchpay/route.ts`,
+   signature-verified — Fapshi via a constant-time comparison against the
+   `x-wh-secret` header, deliberately unauthenticated per `middleware.ts`'s
    comment there), or a client-side poll fallback
    (`pollPaymentStatusAction`, `components/dashboard/payment-status-poller.tsx`)
-   in case a webhook is delayed or missed. Either path calls
-   `updatePaymentStatus()`, which is idempotent (`WHERE status = 'pending'`)
-   so a repeat webhook is a safe no-op.
+   in case a webhook is delayed or missed. **Fapshi sends exactly one
+   webhook attempt per event and does not retry on failure**, so the poll
+   fallback matters more for Fapshi than it would for a provider with
+   normal retry behavior. Either path calls `updatePaymentStatus()`,
+   which is idempotent (`WHERE status = 'pending'`) so a repeat webhook
+   is a safe no-op.
    - On success, this does **not** by itself change `orders.status` —
      payment status and order status stay separate concerns; a retailer
      still must confirm the order per workflow 4.

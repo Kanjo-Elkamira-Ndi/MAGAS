@@ -119,6 +119,10 @@ export interface PaymentRow {
   provider: PaymentProvider | null;
   provider_ref: string | null;
   provider_transaction_id: string | null;
+  // The decline reason the provider actually sent back, when status is
+  // 'failed' — surfaced to the customer and useful for debugging a real
+  // decline vs. a code bug.
+  failure_reason: string | null;
   amount: number;
   created_at: Date;
   updated_at: Date;

@@ -27,7 +27,9 @@ to a later phase's work while an earlier phase's foundation is incomplete.
 ## Phase 2 — Ordering + payments
 - Order placement flow (`orders`, `order_items`, `lib/actions/checkout.ts`)
 - Order status state machine (`lib/orders/status.ts`)
-- Real payments via NotchPay (primary) + Fapshi (fallback) —
+- Real payments via NotchPay (primary) + Fapshi (fallback), both
+  verified against each provider's own docs (`developer.notchpay.co`,
+  `docs.fapshi.com`) —
   `lib/payments/{notchpay,fapshi,charge}.ts`, webhook receivers
   (`app/api/payments/{notchpay,fapshi}/route.ts`), poll fallback
   (`pollPaymentStatusAction`), `PAYMENTS_MODE=simulate` for dev without

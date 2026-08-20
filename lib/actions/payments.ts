@@ -62,7 +62,10 @@ export async function pollPaymentStatusAction(
   }
 
   try {
-    const ref = { providerRef: payment.provider_ref ?? "" };
+    const ref = {
+      providerRef: payment.provider_ref ?? "",
+      providerTransactionId: payment.provider_transaction_id ?? null,
+    };
     const result =
       process.env.PAYMENTS_MODE === "simulate"
         ? await simulateChargeStatus(ref.providerRef)
@@ -140,11 +143,18 @@ export async function retryPaymentAction(
     providerRef,
   });
 
+  if (chargeResult.kind === "failed") {
+    console.error(
+      `[payments] retry declined for order ${data.orderId} via ${chargeResult.provider}: ${chargeResult.message}`,
+    );
+  }
+
   await updatePaymentProviderAttempt(payment.id, {
     provider: chargeResult.provider,
     providerTransactionId:
       chargeResult.kind === "failed" ? null : chargeResult.providerTransactionId,
     status: chargeResult.kind === "failed" ? "failed" : undefined,
+    failureReason: chargeResult.kind === "failed" ? chargeResult.message : undefined,
   });
 
   revalidatePath(`/customer/order/${data.orderId}`);

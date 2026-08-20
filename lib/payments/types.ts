@@ -29,7 +29,10 @@ export type PaymentResult = z.infer<typeof PaymentResultSchema>;
 export const chargeInitiationInputSchema = z.object({
   orderId: z.string().uuid(),
   method: z.enum(["momo", "orange"]),
-  amount: z.number().int().positive(),
+  // 100 XAF is Fapshi's documented minimum for both /direct-pay and
+  // /initiate-pay; NotchPay's minimum isn't confirmed but 100 XAF is a
+  // reasonable floor regardless.
+  amount: z.number().int().min(100),
   phone: z.string().min(6),
   customerEmail: z.string().email().optional(),
   // Generated once by the caller (lib/actions/checkout.ts) and stored on
@@ -37,7 +40,9 @@ export const chargeInitiationInputSchema = z.object({
   // arrives before initiateCharge()'s HTTP call even returns can still be
   // matched to the right row. Reused as-is if NotchPay fails over to
   // Fapshi — only one provider ever ends up actually processing a given
-  // attempt, so both can safely share the same reference.
+  // attempt, so both can safely share the same reference. Passed to
+  // Fapshi as `externalId` (pattern `^[a-zA-Z0-9\-_]{1,100}$`, which a
+  // plain randomUUID() satisfies).
   providerRef: z.string().min(1),
 });
 export type ChargeInitiationInput = z.infer<typeof chargeInitiationInputSchema>;
@@ -63,11 +68,12 @@ export type ChargeInitiationResult =
     };
 
 // Thrown by a provider client when the provider itself is unreachable
-// (network error, timeout, 5xx, auth failure) — distinct from a clean
-// decline, which is a real ChargeInitiationResult, not an exception.
-// Only ProviderUnavailableError should trigger the NotchPay → Fapshi
-// fallback in lib/payments/charge.ts; a decline must never fall through
-// to the other provider.
+// (network error, timeout, 5xx, auth failure, or a missing credential —
+// both provider clients check requireEnv() inside their try block for
+// exactly this reason) — distinct from a clean decline, which is a real
+// ChargeInitiationResult, not an exception. Only ProviderUnavailableError
+// should trigger the NotchPay → Fapshi fallback in lib/payments/charge.ts;
+// a decline must never fall through to the other provider.
 export class ProviderUnavailableError extends Error {
   constructor(
     public readonly provider: PaymentProvider,

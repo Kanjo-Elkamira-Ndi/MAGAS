@@ -98,8 +98,8 @@ an external payment provider needs a real URL to POST a webhook to.
 
 | Route | Method | Notes |
 |---|---|---|
-| `/api/payments/notchpay` | POST | NotchPay webhook receiver — signature-verified, unauthenticated by design |
-| `/api/payments/fapshi` | POST | Fapshi webhook receiver — signature-verified, unauthenticated by design |
+| `/api/payments/notchpay` | POST | NotchPay webhook receiver (primary provider) — HMAC-SHA256 signed (`x-notch-signature`), unauthenticated by design |
+| `/api/payments/fapshi` | POST | Fapshi webhook receiver (fallback provider) — `x-wh-secret` header checked, unauthenticated by design |
 
 Charge initiation itself is a Server Action (`placeOrderAction` at
 checkout, `retryPaymentAction` on the order page), not a route — see

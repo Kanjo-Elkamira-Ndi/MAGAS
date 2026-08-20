@@ -141,7 +141,9 @@ export default async function CustomerOrderDetailPage({
 
           {order.payment?.method !== "cod" &&
             order.payment?.status === "failed" &&
-            order.status === "placed" && <RetryPaymentForm orderId={order.id} />}
+            order.status === "placed" && (
+              <RetryPaymentForm orderId={order.id} failureReason={order.payment?.failure_reason} />
+            )}
 
           {order.status === "out_for_delivery" && (
             <DeliveryMap

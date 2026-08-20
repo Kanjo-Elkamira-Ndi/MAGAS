@@ -9,6 +9,8 @@ export type PaymentListItem = {
   status: PaymentStatus;
   provider: PaymentProvider | null;
   provider_ref: string | null;
+  provider_transaction_id?: string | null;
+  failure_reason?: string | null;
   amount: number;
   created_at: Date;
   customer_name?: string | null;
@@ -136,14 +138,27 @@ export async function updatePaymentProviderAttempt(
     provider: PaymentProvider;
     providerTransactionId: string | null;
     status?: PaymentStatus;
+    // The provider's own decline message, when initiation itself failed
+    // (kind: "failed" from ChargeInitiationResult) — persisted so a
+    // decline is diagnosable later without needing a server log capture
+    // from the exact moment it happened.
+    failureReason?: string | null;
   },
 ): Promise<void> {
   await pool.query(
     `UPDATE payments
      SET provider = $1, provider_transaction_id = $2,
-         status = COALESCE($3, status), updated_at = now()
-     WHERE id = $4`,
-    [input.provider, input.providerTransactionId, input.status ?? null, paymentId],
+         status = COALESCE($3, status),
+         failure_reason = COALESCE($4, failure_reason),
+         updated_at = now()
+     WHERE id = $5`,
+    [
+      input.provider,
+      input.providerTransactionId,
+      input.status ?? null,
+      input.failureReason ?? null,
+      paymentId,
+    ],
   );
 }
 
@@ -175,7 +190,7 @@ export async function getLatestPaymentForOrder(
   orderId: string,
 ): Promise<PaymentListItem | null> {
   const { rows } = await pool.query<PaymentListItem>(
-    `SELECT id, order_id, method, status, provider, provider_ref, amount, created_at
+    `SELECT id, order_id, method, status, provider, provider_ref, provider_transaction_id, failure_reason, amount, created_at
      FROM payments WHERE order_id = $1
      ORDER BY created_at DESC LIMIT 1`,
     [orderId],

@@ -8,14 +8,47 @@ import {
 import { requireEnv } from "./env";
 
 // NotchPay client — primary payment provider (MTN MoMo + Orange Money
-// aggregator for Cameroon).
+// aggregator for Cameroon); Fapshi (lib/payments/fapshi.ts) is the
+// fallback, used only when NotchPay is unavailable. Verified against
+// developer.notchpay.co (unlike the pass fapshi.ts got, two specifics
+// stayed genuinely ambiguous in NotchPay's own docs even after reading
+// them — flagged inline at the exact lines they affect below, not
+// guessed silently.
 //
-// IMPORTANT: the request/response shapes below follow the general
-// aggregator pattern (initialize a charge → get a redirect URL or a
-// direct push → resolve via webhook / status poll), NOT a verified API
-// spec. Confirm exact endpoint paths, field names, and the webhook
-// signature header/scheme against NotchPay's current docs before
-// relying on this in production.
+// - Auth: two headers together on every request — `Authorization` with
+//   the public key (`pk_test_...` in test mode) and `X-Grant` with the
+//   secret key (`sk_test_...`). Docs describe these as "standard" vs
+//   "advanced/sensitive-operation" auth rather than spelling out exactly
+//   which of our calls needs which, so both are sent on everything —
+//   harmless if one is only ever checked for some endpoints.
+// - Base URL is a single host (`https://api.notchpay.co`) for both test
+//   and live — unlike Fapshi's separate subdomains, NotchPay
+//   distinguishes sandbox vs live purely by which key prefix you use
+//   (`pk_test_`/`sk_test_` vs unprefixed live keys).
+// - Charging is a two-step flow: POST /payments *initializes* a payment
+//   (returns a `transaction` id and a hosted-checkout `authorization_url`
+//   — this step alone is enough for a "pay via hosted link" flow), then
+//   PUT /payments/{transaction} *processes* it against a mobile money
+//   channel + phone number, triggering the actual USSD/app push. If the
+//   process step fails or errors after a successful initialize, this
+//   degrades to the `authorization_url` from step 1 rather than failing
+//   outright — the payment still exists and is payable, just not via a
+//   direct push.
+// - AMBIGUITY 1: the `{reference}` path param on both the process and
+//   retrieve-status endpoints is documented only as "reference of the
+//   transaction" — not stated whether that means our merchant
+//   `reference` or NotchPay's own `transaction` id. Implemented here
+//   using the `transaction` id returned from initialize, since that's
+//   what the initialize response hands back for exactly this purpose;
+//   verify against a real sandbox response before depending on this.
+// - AMBIGUITY 2: the webhook payload's example in NotchPay's docs shows
+//   only `{ type, data: { id } }`, not confirmed to include our
+//   `reference`. The full Payment object schema does have a `reference`
+//   field, and webhook payloads conventionally embed the full resource
+//   under `data`, so the handler matches on `data.reference` — but this
+//   is an inference, not a confirmed field, and should be checked
+//   against a real webhook delivery (visible in a tunnel's request
+//   inspector) before relying on it in production.
 
 const DEFAULT_BASE_URL = "https://api.notchpay.co";
 const REQUEST_TIMEOUT_MS = 9_000;
@@ -24,17 +57,26 @@ function baseUrl(): string {
   return process.env.NOTCHPAY_API_BASE_URL || DEFAULT_BASE_URL;
 }
 
+function channel(method: ChargeInitiationInput["method"]): "cm.mtn" | "cm.orange" {
+  return method === "momo" ? "cm.mtn" : "cm.orange";
+}
+
 async function notchpayFetch(path: string, init: RequestInit): Promise<Response> {
-  const secretKey = requireEnv("NOTCHPAY_SECRET_KEY");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
+    // Inside the try block on purpose — a missing credential should
+    // degrade to "this provider is unavailable" (triggering the other
+    // provider's fallback) rather than crashing the caller outright.
+    const publicKey = requireEnv("NOTCHPAY_PUBLIC_KEY");
+    const secretKey = requireEnv("NOTCHPAY_SECRET_KEY");
     const res = await fetch(`${baseUrl()}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${secretKey}`,
+        Authorization: publicKey,
+        "X-Grant": secretKey,
         ...init.headers,
       },
     });
@@ -60,52 +102,82 @@ async function notchpayFetch(path: string, init: RequestInit): Promise<Response>
 export async function initiateCharge(
   input: ChargeInitiationInput,
 ): Promise<ChargeInitiationResult> {
-  const providerRef = input.providerRef;
-  const res = await notchpayFetch("/payments", {
+  // Step 1: initialize.
+  const initRes = await notchpayFetch("/payments", {
     method: "POST",
     body: JSON.stringify({
       amount: input.amount,
       currency: "XAF",
-      reference: providerRef,
+      reference: input.providerRef,
       email: input.customerEmail,
       phone: input.phone,
-      channel: input.method === "momo" ? "cm.mtn" : "cm.orange",
       description: `MAGAS order ${input.orderId}`,
     }),
   });
 
-  if (!res.ok) {
+  if (!initRes.ok) {
     // A clean decline (4xx other than auth) — a real outcome, not an
     // availability problem, so this returns a result rather than
     // throwing ProviderUnavailableError, and must NOT trigger the
     // Fapshi fallback.
-    const body = await res.json().catch(() => null);
+    const body = await initRes.json().catch(() => null);
     return {
       kind: "failed",
       provider: "notchpay",
-      message: body?.message ?? `NotchPay declined the charge (${res.status}).`,
+      message: body?.message ?? `NotchPay declined the charge (${initRes.status}).`,
     };
   }
 
-  const body = await res.json();
-  const transactionId: string | null = body?.transaction?.reference ?? body?.data?.id ?? null;
-  const redirectUrl: string | undefined =
-    body?.authorization_url ?? body?.data?.authorization_url;
+  const initBody = await initRes.json();
+  const transactionId: string | undefined = initBody?.transaction;
+  const authorizationUrl: string | undefined = initBody?.authorization_url;
 
-  if (redirectUrl) {
+  if (!transactionId) {
+    return {
+      kind: "failed",
+      provider: "notchpay",
+      message: "NotchPay did not return a transaction reference.",
+    };
+  }
+
+  // Step 2: process against a mobile money channel — triggers the
+  // direct push. A failure here (decline or ProviderUnavailableError)
+  // degrades to the hosted-checkout link from step 1 rather than
+  // failing outright, since the payment genuinely exists and is payable
+  // that way even if the direct push didn't go through.
+  try {
+    const processRes = await notchpayFetch(`/payments/${transactionId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        channel: channel(input.method),
+        data: { phone: input.phone, country: "CM" },
+      }),
+    });
+    if (processRes.ok) {
+      return {
+        kind: "push_sent",
+        provider: "notchpay",
+        providerRef: input.providerRef,
+        providerTransactionId: transactionId,
+      };
+    }
+  } catch (err) {
+    if (!(err instanceof ProviderUnavailableError)) throw err;
+  }
+
+  if (authorizationUrl) {
     return {
       kind: "redirect",
       provider: "notchpay",
-      providerRef,
+      providerRef: input.providerRef,
       providerTransactionId: transactionId,
-      redirectUrl,
+      redirectUrl: authorizationUrl,
     };
   }
   return {
-    kind: "push_sent",
+    kind: "failed",
     provider: "notchpay",
-    providerRef,
-    providerTransactionId: transactionId,
+    message: "NotchPay could not charge this phone number directly.",
   };
 }
 
@@ -113,6 +185,9 @@ export function verifyWebhookSignature(
   rawBody: string,
   signatureHeader: string | null,
 ): boolean {
+  // Confirmed: NotchPay signs webhooks with HMAC-SHA256 over the raw
+  // JSON body, keyed by the webhook hash from Business suite → Settings
+  // → API Keys, sent in the `x-notch-signature` header as a hex digest.
   if (!signatureHeader) return false;
   const webhookSecret = process.env.NOTCHPAY_WEBHOOK_SECRET;
   if (!webhookSecret) return false;
@@ -130,17 +205,25 @@ export async function getChargeStatus(ref: {
   providerRef: string;
   providerTransactionId?: string | null;
 }): Promise<PaymentResult> {
-  const res = await notchpayFetch(
-    `/payments/${ref.providerTransactionId ?? ref.providerRef}`,
-    { method: "GET" },
-  );
+  // See AMBIGUITY 1 above — using the transaction id from initiation,
+  // not our own reference, to look up status.
+  if (!ref.providerTransactionId) {
+    return { status: "pending", providerRef: ref.providerRef };
+  }
+
+  const res = await notchpayFetch(`/payments/${ref.providerTransactionId}`, {
+    method: "GET",
+  });
   const body = await res.json().catch(() => null);
-  const status: string | undefined = body?.transaction?.status ?? body?.data?.status;
-  if (status === "complete" || status === "success") {
+  // Confirmed Payment.status enum: pending | processing | complete |
+  // failed | canceled | expired.
+  const status: string | undefined = body?.status ?? body?.data?.status;
+  if (status === "complete") {
     return { status: "success", providerRef: ref.providerRef };
   }
   if (status === "failed" || status === "canceled" || status === "expired") {
     return { status: "failed", providerRef: ref.providerRef };
   }
+  // pending | processing
   return { status: "pending", providerRef: ref.providerRef };
 }

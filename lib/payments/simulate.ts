@@ -2,14 +2,14 @@ import type { ChargeInitiationInput, ChargeInitiationResult, PaymentResult } fro
 
 // Dev-only fake processor, opt-in via PAYMENTS_MODE=simulate (checked in
 // lib/payments/charge.ts, which also logs a loud warning on every use) —
-// lets the checkout flow be exercised before NotchPay/Fapshi sandbox
+// lets the checkout flow be exercised before Fapshi/NotchPay sandbox
 // credentials are provisioned. Never set PAYMENTS_MODE in production.
 //
-// Recorded as provider "notchpay" purely because the schema's `provider`
-// CHECK constraint only allows real provider values — there's no other
-// way to distinguish a simulated payment in the DB besides the
-// console.warn logged at charge time, so keep PAYMENTS_MODE out of
-// production deploys.
+// Recorded as provider "notchpay" (the real primary) purely because the
+// schema's `provider` CHECK constraint only allows real provider values
+// — there's no other way to distinguish a simulated payment in the DB
+// besides the console.warn logged at charge time, so keep PAYMENTS_MODE
+// out of production deploys.
 
 const ARTIFICIAL_DELAY_MIN_MS = 800;
 const ARTIFICIAL_DELAY_JITTER_MS = 600;

@@ -123,10 +123,17 @@ export async function placeOrderAction(
     providerRef,
   });
 
+  if (chargeResult.kind === "failed") {
+    console.error(
+      `[payments] charge declined for order ${orderId} via ${chargeResult.provider}: ${chargeResult.message}`,
+    );
+  }
+
   await updatePaymentProviderAttempt(paymentId, {
     provider: chargeResult.provider,
     providerTransactionId: chargeResult.kind === "failed" ? null : chargeResult.providerTransactionId,
     status: chargeResult.kind === "failed" ? "failed" : undefined,
+    failureReason: chargeResult.kind === "failed" ? chargeResult.message : undefined,
   });
 
   return { orderId, chargeResult };

@@ -9,14 +9,23 @@ import type { PaymentStatus } from "@/types/db";
 // session on an external provider POST. That's the one deliberate
 // exception to "no route trusts a client-supplied role" in this app.
 //
-// Header name and payload shape below follow the general aggregator
-// pattern, NOT a confirmed spec — verify against NotchPay's current
-// webhook docs before relying on this in production.
+// Header (`x-notch-signature`, HMAC-SHA256) and the confirmed Payment
+// status enum (pending | processing | complete | failed | canceled |
+// expired) are verified against developer.notchpay.co. One inference,
+// not a confirmed fact: NotchPay's own webhook example only shows
+// `{ type, data: { id } }`, not explicitly that `data.reference` (our
+// merchant reference) is present — matching on `data.reference` here
+// assumes the full Payment object (which does have a `reference` field)
+// is embedded under `data`, per convention. See the AMBIGUITY 2 comment
+// in lib/payments/notchpay.ts; check a real webhook delivery (visible
+// in a tunnel's request inspector) before depending on this in
+// production.
 const SIGNATURE_HEADER = "x-notch-signature";
 
 function mapStatus(raw: string | undefined): PaymentStatus | null {
-  if (raw === "complete" || raw === "success") return "success";
+  if (raw === "complete") return "success";
   if (raw === "failed" || raw === "canceled" || raw === "expired") return "failed";
+  // pending | processing — no status change yet.
   return null;
 }
 
