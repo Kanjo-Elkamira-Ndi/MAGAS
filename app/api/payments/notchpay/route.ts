@@ -11,16 +11,30 @@ import type { PaymentStatus } from "@/types/db";
 //
 // Header (`x-notch-signature`, HMAC-SHA256) and the confirmed Payment
 // status enum (pending | processing | complete | failed | canceled |
-// expired) are verified against developer.notchpay.co. One inference,
-// not a confirmed fact: NotchPay's own webhook example only shows
-// `{ type, data: { id } }`, not explicitly that `data.reference` (our
-// merchant reference) is present — matching on `data.reference` here
-// assumes the full Payment object (which does have a `reference` field)
-// is embedded under `data`, per convention. See the AMBIGUITY 2 comment
-// in lib/payments/notchpay.ts; check a real webhook delivery (visible
-// in a tunnel's request inspector) before depending on this in
-// production.
+// expired) are verified against developer.notchpay.co. Every real API
+// response nests the payment under a `transaction` key with the
+// customer-supplied reference at `merchant_reference`/`trxref` (NOT the
+// bare `reference` field, which is NotchPay's own id) — see the file
+// header note in lib/payments/notchpay.ts for how that was confirmed
+// against live data. The webhook payload's exact shape is still
+// unconfirmed (no real delivery inspected yet), so both extractors below
+// check several plausible locations rather than committing to one guess
+// — simplify once a real webhook has been inspected via a tunnel's
+// request log.
 const SIGNATURE_HEADER = "x-notch-signature";
+
+function extractReference(payload: Record<string, unknown>): string | undefined {
+  const data = (payload.data ?? payload) as Record<string, unknown>;
+  const transaction = (data.transaction ?? data) as Record<string, unknown>;
+  const candidates = [transaction.merchant_reference, transaction.trxref];
+  return candidates.find((c): c is string => typeof c === "string");
+}
+
+function extractStatus(payload: Record<string, unknown>): string | undefined {
+  const data = (payload.data ?? payload) as Record<string, unknown>;
+  const transaction = (data.transaction ?? data) as Record<string, unknown>;
+  return typeof transaction.status === "string" ? transaction.status : undefined;
+}
 
 function mapStatus(raw: string | undefined): PaymentStatus | null {
   if (raw === "complete") return "success";
@@ -47,9 +61,8 @@ export async function POST(req: Request) {
     return errorResponse(ErrorCodes.VALIDATION_ERROR, "Malformed payload.", 400);
   }
 
-  const data = (payload.data ?? payload) as Record<string, unknown>;
-  const reference = typeof data.reference === "string" ? data.reference : undefined;
-  const mapped = mapStatus(typeof data.status === "string" ? data.status : undefined);
+  const reference = extractReference(payload);
+  const mapped = mapStatus(extractStatus(payload));
 
   if (!reference) {
     return successResponse({ ignored: true });

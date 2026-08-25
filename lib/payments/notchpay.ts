@@ -34,21 +34,33 @@ import { requireEnv } from "./env";
 //   degrades to the `authorization_url` from step 1 rather than failing
 //   outright — the payment still exists and is payable, just not via a
 //   direct push.
-// - AMBIGUITY 1: the `{reference}` path param on both the process and
-//   retrieve-status endpoints is documented only as "reference of the
-//   transaction" — not stated whether that means our merchant
-//   `reference` or NotchPay's own `transaction` id. Implemented here
-//   using the `transaction` id returned from initialize, since that's
-//   what the initialize response hands back for exactly this purpose;
-//   verify against a real sandbox response before depending on this.
-// - AMBIGUITY 2: the webhook payload's example in NotchPay's docs shows
-//   only `{ type, data: { id } }`, not confirmed to include our
-//   `reference`. The full Payment object schema does have a `reference`
-//   field, and webhook payloads conventionally embed the full resource
-//   under `data`, so the handler matches on `data.reference` — but this
-//   is an inference, not a confirmed field, and should be checked
-//   against a real webhook delivery (visible in a tunnel's request
-//   inspector) before relying on it in production.
+// - RESOLVED (was AMBIGUITY 1, confirmed against a real live GET
+//   /payments/{reference} response): every response wraps the actual
+//   payment under a **`transaction`** object, not at the top level —
+//   `{ status: "OK", message, code, transaction: { reference,
+//   merchant_reference, trxref, status, amount, ... } }`. The top-level
+//   `status` is just the API envelope's own status ("OK" on any
+//   successful call) — the real payment status is `transaction.status`.
+//   `transaction.reference` (e.g. "trx.xxx...") is NotchPay's own
+//   transaction id, used as the `{reference}` path param on the process
+//   and retrieve-status endpoints. `transaction.merchant_reference` /
+//   `transaction.trxref` (identical values) are *our* reference
+//   (ChargeInitiationInput.providerRef) round-tripped back. An earlier
+//   version of this file read `initBody.transaction` as if it were the
+//   ID string itself, and `body.status` as the payment status — both
+//   wrong, confirmed by three real transactions silently stuck
+//   "pending" in the DB while NotchPay had already resolved them to
+//   "failed". Fixed below; flagging the mistake here so it isn't
+//   reintroduced.
+// - AMBIGUITY 2 (still open, no real webhook delivery inspected yet):
+//   the webhook payload shape is unconfirmed — plausibly `data` mirrors
+//   the same `transaction` shape directly, or wraps it under another
+//   `transaction` key. The webhook route checks both, preferring
+//   `merchant_reference`/`trxref` (now confirmed as *our* reference
+//   field name) over a bare `reference` (which is NotchPay's own id,
+//   not ours — matching against it would never find our row). Verify
+//   against a real webhook delivery (a tunnel's request inspector) and
+//   simplify once confirmed.
 
 const DEFAULT_BASE_URL = "https://api.notchpay.co";
 const REQUEST_TIMEOUT_MS = 9_000;
@@ -129,8 +141,15 @@ export async function initiateCharge(
   }
 
   const initBody = await initRes.json();
-  const transactionId: string | undefined = initBody?.transaction;
-  const authorizationUrl: string | undefined = initBody?.authorization_url;
+  // Confirmed shape: the payment is nested under `transaction`, not at
+  // the top level (see the file header note). `authorization_url`'s
+  // exact location for this specific endpoint isn't independently
+  // confirmed (only retrieve-payment has been inspected against real
+  // data) — checked both plausible spots defensively rather than
+  // guessing one.
+  const transactionId: string | undefined = initBody?.transaction?.reference;
+  const authorizationUrl: string | undefined =
+    initBody?.authorization_url ?? initBody?.transaction?.authorization_url;
 
   if (!transactionId) {
     return {
@@ -205,8 +224,8 @@ export async function getChargeStatus(ref: {
   providerRef: string;
   providerTransactionId?: string | null;
 }): Promise<PaymentResult> {
-  // See AMBIGUITY 1 above — using the transaction id from initiation,
-  // not our own reference, to look up status.
+  // Using NotchPay's own transaction id (transaction.reference from
+  // initiation), not our reference — confirmed correct, see file header.
   if (!ref.providerTransactionId) {
     return { status: "pending", providerRef: ref.providerRef };
   }
@@ -215,9 +234,15 @@ export async function getChargeStatus(ref: {
     method: "GET",
   });
   const body = await res.json().catch(() => null);
+  // Confirmed against a real response: the payment is nested under
+  // `transaction`; `body.status` is the API envelope's own status
+  // ("OK"), NEVER the payment status — reading it directly here was the
+  // second half of the bug that left real failed/succeeded payments
+  // stuck reporting "pending" forever, since "OK" never matches any of
+  // the enum values below.
   // Confirmed Payment.status enum: pending | processing | complete |
   // failed | canceled | expired.
-  const status: string | undefined = body?.status ?? body?.data?.status;
+  const status: string | undefined = body?.transaction?.status;
   if (status === "complete") {
     return { status: "success", providerRef: ref.providerRef };
   }
