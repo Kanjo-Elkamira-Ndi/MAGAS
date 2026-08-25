@@ -16,7 +16,14 @@ export const pool: Pool =
     connectionString: process.env.DATABASE_URL,
     max: 10,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    // Managed Postgres providers with a free-tier auto-suspend (Neon
+    // included) can take several seconds to wake a cold compute on the
+    // first connection after a period of inactivity — 5s was tight
+    // enough to occasionally lose that race and surface as an opaque
+    // AggregateError with no message. 15s tolerates a cold start without
+    // meaningfully slowing down the common case (an already-warm
+    // connection resolves in milliseconds regardless of this ceiling).
+    connectionTimeoutMillis: 15_000,
   });
 
 if (process.env.NODE_ENV !== "production") {
