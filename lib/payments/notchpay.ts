@@ -25,15 +25,16 @@ import { requireEnv } from "./env";
 //   and live — unlike Fapshi's separate subdomains, NotchPay
 //   distinguishes sandbox vs live purely by which key prefix you use
 //   (`pk_test_`/`sk_test_` vs unprefixed live keys).
-// - Charging is a two-step flow: POST /payments *initializes* a payment
-//   (returns a `transaction` id and a hosted-checkout `authorization_url`
-//   — this step alone is enough for a "pay via hosted link" flow), then
-//   PUT /payments/{transaction} *processes* it against a mobile money
-//   channel + phone number, triggering the actual USSD/app push. If the
-//   process step fails or errors after a successful initialize, this
-//   degrades to the `authorization_url` from step 1 rather than failing
-//   outright — the payment still exists and is payable, just not via a
-//   direct push.
+// - Charging is a single step, by design: POST /payments *initializes* a
+//   payment and returns a hosted-checkout `authorization_url` (confirmed
+//   at the top level of the response, sibling to `transaction`) — the
+//   customer is redirected there to complete payment on NotchPay's own
+//   page. NotchPay also supports a second step (PUT /payments/{id},
+//   processing directly against a channel + phone for a USSD/app push
+//   with no redirect) but this app deliberately doesn't use it: the
+//   hosted-checkout redirect is simpler, doesn't depend on the two
+//   still-ambiguous specifics of the direct-charge step, and is what
+//   "click Place order → land on the NotchPay page" means product-wise.
 // - RESOLVED (was AMBIGUITY 1, confirmed against a real live GET
 //   /payments/{reference} response): every response wraps the actual
 //   payment under a **`transaction`** object, not at the top level —
@@ -67,10 +68,6 @@ const REQUEST_TIMEOUT_MS = 9_000;
 
 function baseUrl(): string {
   return process.env.NOTCHPAY_API_BASE_URL || DEFAULT_BASE_URL;
-}
-
-function channel(method: ChargeInitiationInput["method"]): "cm.mtn" | "cm.orange" {
-  return method === "momo" ? "cm.mtn" : "cm.orange";
 }
 
 async function notchpayFetch(path: string, init: RequestInit): Promise<Response> {
@@ -114,7 +111,10 @@ async function notchpayFetch(path: string, init: RequestInit): Promise<Response>
 export async function initiateCharge(
   input: ChargeInitiationInput,
 ): Promise<ChargeInitiationResult> {
-  // Step 1: initialize.
+  // Without a callback, NotchPay leaves the customer stranded on their
+  // hosted page after paying — confirmed by inspecting a real response,
+  // where the field came back `"callback":null` since nothing was sent.
+  const callbackBase = process.env.NEXTAUTH_URL ?? "";
   const initRes = await notchpayFetch("/payments", {
     method: "POST",
     body: JSON.stringify({
@@ -124,6 +124,7 @@ export async function initiateCharge(
       email: input.customerEmail,
       phone: input.phone,
       description: `MAGAS order ${input.orderId}`,
+      callback: `${callbackBase}/customer/order/${input.orderId}`,
     }),
   });
 
@@ -141,62 +142,27 @@ export async function initiateCharge(
   }
 
   const initBody = await initRes.json();
-  // Confirmed shape: the payment is nested under `transaction`, not at
-  // the top level (see the file header note). `authorization_url`'s
-  // exact location for this specific endpoint isn't independently
-  // confirmed (only retrieve-payment has been inspected against real
-  // data) — checked both plausible spots defensively rather than
-  // guessing one.
+  // Confirmed shape (real request/response, not a guess): the payment
+  // itself is nested under `transaction`, while `authorization_url` is
+  // a top-level sibling — { status, message, code, transaction: {
+  // reference, merchant_reference, ... }, authorization_url }.
   const transactionId: string | undefined = initBody?.transaction?.reference;
-  const authorizationUrl: string | undefined =
-    initBody?.authorization_url ?? initBody?.transaction?.authorization_url;
+  const authorizationUrl: string | undefined = initBody?.authorization_url;
 
-  if (!transactionId) {
+  if (!transactionId || !authorizationUrl) {
     return {
       kind: "failed",
       provider: "notchpay",
-      message: "NotchPay did not return a transaction reference.",
+      message: "NotchPay did not return a payment link.",
     };
   }
 
-  // Step 2: process against a mobile money channel — triggers the
-  // direct push. A failure here (decline or ProviderUnavailableError)
-  // degrades to the hosted-checkout link from step 1 rather than
-  // failing outright, since the payment genuinely exists and is payable
-  // that way even if the direct push didn't go through.
-  try {
-    const processRes = await notchpayFetch(`/payments/${transactionId}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        channel: channel(input.method),
-        data: { phone: input.phone, country: "CM" },
-      }),
-    });
-    if (processRes.ok) {
-      return {
-        kind: "push_sent",
-        provider: "notchpay",
-        providerRef: input.providerRef,
-        providerTransactionId: transactionId,
-      };
-    }
-  } catch (err) {
-    if (!(err instanceof ProviderUnavailableError)) throw err;
-  }
-
-  if (authorizationUrl) {
-    return {
-      kind: "redirect",
-      provider: "notchpay",
-      providerRef: input.providerRef,
-      providerTransactionId: transactionId,
-      redirectUrl: authorizationUrl,
-    };
-  }
   return {
-    kind: "failed",
+    kind: "redirect",
     provider: "notchpay",
-    message: "NotchPay could not charge this phone number directly.",
+    providerRef: input.providerRef,
+    providerTransactionId: transactionId,
+    redirectUrl: authorizationUrl,
   };
 }
 
